@@ -1,45 +1,44 @@
 /**
-!.gitignore
-!README
+!/.gitignore
+!/README
 
-!sys/Makefile
+!/sys
+!/sys/Makefile
+!/sys/conf/NOTES
+!/sys/conf/files
+!/sys/conf/options
 
-!sys/conf/NOTES
-!sys/conf/files
-!sys/conf/options
+!/sys/modules
+!/sys/modules/if_bridge
+!/sys/modules/if_bridge/*
 
-!sys/modules
-!sys/modules/if_bridge/Makefile
-!sys/modules/if_mpe/Makefile
-!sys/modules/if_vether/Makefile
+!/sys/modules/if_mpe
+!/sys/modules/if_mpe/*
 
-!sys/net/if.c
-!sys/net/if.h
-!sys/net/if_bridge.c
-!sys/net/if_bridgevar.h
-!sys/net/if_ethersubr.c
-!sys/net/if_fddisubr.c
-!sys/net/if_llatbl.c
-!sys/net/if_mpe.c
-!sys/net/if_types.h
-!sys/net/if_vether.c
-!sys/net/route.c
-!sys/net/rtsock.c
+!/sys/modules/if_vether
+!/sys/modules/if_vether/*
 
+!/sys/net
+!/sys/net/if.c
+!/sys/net/if.h
+!/sys/net/if_bridge.c
+!/sys/net/if_bridgevar.h
+!/sys/net/if_ethersubr.c
+!/sys/net/if_fddisubr.c
+!/sys/net/if_llatbl.c
+!/sys/net/if_mpe.c
+!/sys/net/if_types.h
+!/sys/net/if_vether.c
+!/sys/net/route.c
+!/sys/net/rtsock.c
 
-!sys/netgraph/ng_ether.c
+!/sys/netgraph
+!/sys/netgraph/ng_ether.c
 
-!sys/netinet/if_ether.c
+!/sys/netinet
+!/sys/netinet/if_ether.c
 
-!sys/netmpls/mpls.c
-!sys/netmpls/mpls.h
-!sys/netmpls/mpls_arp.c
-!sys/netmpls/mpls_input.c
-!sys/netmpls/mpls_output.c
-!sys/netmpls/mpls_proto.c
-!sys/netmpls/mpls_raw.c
-!sys/netmpls/mpls_rmx.c
-!sys/netmpls/mpls_rtalert.c
-!sys/netmpls/mpls_shim.c
+!/sys/netmpls
+!/sys/netmpls/*
 
 

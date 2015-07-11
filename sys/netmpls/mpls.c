@@ -141,7 +141,7 @@ mpls_ifaof_ifpforlspdst(struct sockaddr *seg, struct sockaddr *x,
 		if (satosftn_label(ifa->ifa_dstaddr) != i) 
 			continue;
 		
-		sa = (struct sockaddr *)&ifatonhlfe_x(ifa);
+		sa = (struct sockaddr *)&mia_x(ifa);
 
 		if (mpls_sa_equal(sa, x)) {
 			ifa_ref(ifa);
@@ -376,7 +376,7 @@ mpls_ifawithsegdst_fib(struct sockaddr *seg, struct sockaddr *x,
 			if (satosmpls_label(ifa->ifa_addr) != i) 
 				continue;
 			
-			sa = (struct sockaddr *)&ifatonhlfe_x(ifa);
+			sa = (struct sockaddr *)&mia_x(ifa);
 			
 			if (mpls_sa_equal(sa, x)) {
 				ifa_ref(ifa);
@@ -424,7 +424,7 @@ mpls_ifaof_ifpforsegdst(struct sockaddr *seg, struct sockaddr *x,
 		if (satosmpls_label(ifa->ifa_addr) != i) 
 			continue;
 		
-		sa = (struct sockaddr *)&ifatonhlfe_x(ifa);
+		sa = (struct sockaddr *)&mia_x(ifa);
 
 		if (mpls_sa_equal(sa, x)) {
 			ifa_ref(ifa);
@@ -512,7 +512,7 @@ mpls_ifaof_ifpfordst(struct sockaddr *x, int flags,
 		if (ifa->ifa_addr->sa_family != af)
 			continue;
 		
-		sa = (struct sockaddr *)&ifatonhlfe_x(ifa);
+		sa = (struct sockaddr *)&mia_x(ifa);
 
 		if (mpls_sa_equal(sa, x) == 0) 
 			continue;

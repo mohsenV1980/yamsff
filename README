@@ -1,14 +1,18 @@
 Yet another MPLS stack for FreeBSD (yams)
 =========================================
 
-This software is derived from present implementation in current OpenBSD
+This software is derived from present MPLS implementation in current OpenBSD
 release.
 
 IMHO it is better to derive then reinventing the wheel (NIH syndrome).
 
-NOTE:	This stuff won't compile yet, but soon - I'll fix it!!! :-).
+NOTE:	This stuff won't compile yet, I'll fix it!!! :-).
 NOTE:
-NOTE: 	Therfore this software is under active developement and far from
+NOTE:	At the moment, I'm using github as online storage for something 
+NOTE:	I've started (re-)developing. Yet, it is better then storing all  
+NOTE:	stuff locally on my (insecure) workstation.
+NOTE:
+NOTE: 	Therfore, this software is under active developement and far from
 NOTE: 	correctness and contains (some serious) flaws implecitely.
 NOTE: 	
 NOTE: 	Due to the upcoming Operating System Crisis in software industry, 
@@ -19,4 +23,4 @@ NOTE:	from codebase of BSD based OS's.
 NOTE: 	
 NOTE: 	Stern warning: Do not use this software in production environments!
 
-
+Don't panic!!! I've started a refactoring cycle.
