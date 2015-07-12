@@ -19,13 +19,15 @@ NOTE: 	integration in kernel space of BSD based OS's or OS's where its
 NOTE: 	implementation of system or network protocols is based or derived 
 NOTE:	from codebase of BSD based OS's.
 NOTE: 	
-NOTE: 	Stern warning: Do not use this software or in production environments!
+NOTE: 	Stern warning: Do not use this software in production environments!
 
-Don't panic!!! I've started testing.
+Next tasks:
+-----------
+ 
+ o Testing components relating MPLS.
+ o Adding modefied ifconfig(8) and route(8) commands.
+ o Writing detailed implementation notes.
+ o Starting IPv6 integration. 
 
-Further, I'll add modefied ifconfig(8) and route(8) commands, after testing 
-MPLS related components.
+Btw, I am a very busy person.
 
-Finally, I'll add more detailed description implementation notes.
-
-Btw, I am a very busy person. 

@@ -131,7 +131,7 @@
 #define MPLS_VPRD_MASK 		__MADDR(0xfff00000U)
 
 /* 
- * Reserved lavel values (rfc-3032) 
+ * Reserved label values (rfc-3032) 
  */
 #define MPLS_LABEL_IPV4NULL 		0 /* IPv4 Explicit NULL Label */
 #define MPLS_LABEL_RTALERT 			1 /* Router Alert Label       */
@@ -215,8 +215,8 @@ struct sockaddr_mpls {
  *   nhlfe   : Next Hop Label Forwarding Entry
  *   op      : MPLS operation
  *   rd      : MPLS Route Distinguisher or reserved label value
- *   seg_i   : defines downstream label, e. g. in-segment
- *   seg_j  : defines downstream label, e. g. out-segment 
+ *   seg_i   : defines downstream label, e. g. in-segment (seg_in)
+ *   seg_j   : defines downstream label, e. g. out-segment (seg_out)
  *   seg     : denotes particular Label Switch Path (LSP)
  *   x       : destination, key in fec
  *
