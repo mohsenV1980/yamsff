@@ -138,8 +138,7 @@ mpls_shim_swap(struct mbuf *m, struct mpls_ro *mro)
  */			
 		shim->shim_label &= ~MPLS_EXP_MASK;
 		shim->shim_label |= t & MPLS_EXP_MASK;
-	}
-out:		
+	}	
 	return (m);
 }
 
@@ -206,7 +205,7 @@ mpls_encap(struct mbuf *m, const struct sockaddr *dst, struct mpls_ro *mro)
  * See net/if_ethersubr.c for further details.
  */		
 		mro->mro_lle = (mro->mro_ifa) ? 
-			ifatonhlfe_lle(mro->mro_ifa) : NULL;		
+			mpls_lle(mro->mro_ifa) : NULL;		
 		
 		break;
 	case AF_MPLS:	

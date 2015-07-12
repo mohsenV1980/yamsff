@@ -4,9 +4,7 @@ Yet another MPLS stack for FreeBSD (yamsff)
 This software is derived from present MPLS implementation in current OpenBSD
 release.
 
-IMHO it is better to derive then reinventing the wheel (NIH syndrome).
-
-NOTE:	This stuff won't compile yet, I'll fix it!!! :-).
+NOTE:	This stuff compiles, but MPLS related components are untested!!!.
 NOTE:
 NOTE:	At the moment, I'm using github as online storage for something 
 NOTE:	I've started (re-)developing. Yet, it is better then storing all  
@@ -21,8 +19,13 @@ NOTE: 	integration in kernel space of BSD based OS's or OS's where its
 NOTE: 	implementation of system or network protocols is based or derived 
 NOTE:	from codebase of BSD based OS's.
 NOTE: 	
-NOTE: 	Stern warning: Do not use this software in production environments!
+NOTE: 	Stern warning: Do not use this software or in production environments!
 
-Don't panic!!! I've started a refactoring cycle.
+Don't panic!!! I've started testing.
 
-Further, I'll add modefied ifconfig(8) and route(8) commands, after bugfixing.
+Further, I'll add modefied ifconfig(8) and route(8) commands, after testing 
+MPLS related components.
+
+Finally, I'll add more detailed description implementation notes.
+
+Btw, I am a very busy person. 

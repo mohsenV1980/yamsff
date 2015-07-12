@@ -447,8 +447,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 				break;
 			}	
 			error = mpls_purgeaddr(ifa);
-			nhlfe = (error == 0) 
-				? ifatonhlfe(ifa) : NULL;	
+			nhlfe = (error == 0) ? ifatomia(ifa) : NULL;	
 		} else 
 			error = EADDRNOTAVAIL;
 		
@@ -481,7 +480,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		ifa_ref(ifa);
 
 		NHLFE_WLOCK();
-		TAILQ_INSERT_TAIL(&mpls_iflist, ifatonhlfe(ifa), nhlfe_link);	
+		TAILQ_INSERT_TAIL(&mpls_iflist, ifatomia(ifa), mia_link);	
 		NHLFE_WUNLOCK();
 
 		ifa_ref(ifa);
@@ -728,21 +727,21 @@ mpls_purgeaddr(struct ifaddr *ifa)
 	ifa_free(ifa);
 	
 	NHLFE_WLOCK();
-	TAILQ_REMOVE(&mpls_iflist, ifatonhlfe(ifa), nhlfe_link);	
+	TAILQ_REMOVE(&mpls_iflist, ifatomia(ifa), mia_link);	
 	NHLFE_WUNLOCK();
 /*
  * Finalize.
  */	
 	bzero(seg, seg->sa_len);
-	seg = (struct sockaddr *)&ifatonhlfe_x(ifa);			
-	bzero(seg, sizeof(ifatonhlfe_x(ifa)));
-	seg = (struct sockaddr  *)&ifatonhlfe_seg(ifa);			
-	bzero(seg, sizeof(ifatonhlfe_seg(ifa)));
-	seg = (struct sockaddr  *)&ifatonhlfe_nh(ifa);			
-	bzero(seg, sizeof(ifatonhlfe_nh(ifa)));
+	seg = (struct sockaddr *)&mpls_x(ifa);			
+	bzero(seg, sizeof(mpls_x(ifa)));
+	seg = (struct sockaddr  *)&mpls_seg(ifa);			
+	bzero(seg, sizeof(mpls_seg(ifa)));
+	seg = (struct sockaddr  *)&mpls_nh(ifa);			
+	bzero(seg, sizeof(mpls_nh(ifa)));
 	
 	mpls_flags(ifa) = 0;	
-	ifatonhlfe_lle(ifa) = NULL;	
+	mpls_lle(ifa) = NULL;	
 	
 	ifa_free(ifa);
 out:
@@ -797,7 +796,7 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 				continue;
 				
 			if (mpls_sa_equal(rt_key(fec), 
-				(struct sockaddr *)&ifatonhlfe_x(ifa)) == 0)
+				(struct sockaddr *)&mpls_x(ifa)) == 0)
 				continue;
 	
 			ifa_ref(ifa);

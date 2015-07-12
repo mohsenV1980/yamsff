@@ -366,7 +366,7 @@ mpls_forward(struct mbuf *m, int off __unused)
 	struct sockaddr *gw;
 	
 	ro = (struct route *)&mplsroute;
-	mro = (struct route_mpls *)ro;
+	mro = (struct mpls_ro *)ro;
 	bzero(mro, sizeof(*mro));
 /*
  * Map incoming segment (seg_in) and 

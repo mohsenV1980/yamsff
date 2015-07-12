@@ -166,13 +166,13 @@ static int
 sysctl_mpls_arp(SYSCTL_HANDLER_ARGS)
 {
 	struct mpls_ifaddr *nhlfe;
-	int enable = mpls_arp_by_fec;
+	int enable = mpls_arp;
 	int error;
 
 	error = sysctl_handle_int(oidp, &enable, 0, req);
 	enable = (enable) ? 1 : 0;
 
-	if (enable != mpls_arp_by_fec) {
+	if (enable != mpls_arp) {
 		
 		NHLFE_WLOCK();
 		TAILQ_FOREACH(nhlfe, &mpls_iflist, mia_link) {
@@ -180,7 +180,7 @@ sysctl_mpls_arp(SYSCTL_HANDLER_ARGS)
 		}		
 		NHLFE_WUNLOCK();	
 		
-		mpls_arp_by_fec = enable;
+		mpls_arp = enable;
 	}
 	return (error);
 }
@@ -202,7 +202,8 @@ SYSCTL_INT(_net_link_ether_mpls, OID_AUTO, arp_maxtries, CTLFLAG_RW,
 #define SMPLS(s) ((struct sockaddr_mpls *)s)
 #define SDL(s) ((struct sockaddr_dl *)s)
 
-static void 	mpls_arprequest(struct ifnet *, struct sockaddr *, u_char *);
+static void 	mpls_arprequest(struct ifnet *, const struct sockaddr *, 
+	u_char *);
 
 int 	mpls_arp_ifinit(struct ifnet *, struct ifaddr *);
 void 	mpls_arpinput(struct mbuf *);
@@ -351,7 +352,7 @@ bad:
  * Broadcast ARPOP_REQUEST.
  */
 static void
-mpls_arprequest(struct ifnet *ifp, struct sockaddr *seg, u_char *lla)
+mpls_arprequest(struct ifnet *ifp, const struct sockaddr *seg, u_char *lla)
 {
 	struct mbuf *m;
 	struct arphdr *arh;
@@ -521,7 +522,7 @@ mpls_arpinput(struct mbuf *m)
 		gw = mro->mro_ilm->rt_gateway;	
 		ifp = mro->mro_ilm->rt_ifp;
 		
-		if (mpls_proxy_arp != 0 satosftn_op(gw) != RTF_POP) {			
+		if (mpls_proxy_arp != 0 && satosftn_op(gw) != RTF_POP) {			
 			seg->smpls_label = satosftn_label(gw);
 			gw = (struct sockaddr *)&seg;
 /* 
@@ -561,7 +562,7 @@ mpls_arpinput(struct mbuf *m)
  */	
 		mro->mro_ifa = mpls_ifaof_ifpforlsp(gw, ifp0, 1);
 		if (mro->mro_ifa == NULL)
-			mro->mro_ifa = mpls_ifawithlsp_fib(gw, M_MGETFIB(m), 1);
+			mro->mro_ifa = mpls_ifawithlsp_fib(gw, M_GETFIB(m), 1);
 
 		if (mro->mro_ifa == NULL)
 			break;
@@ -583,8 +584,8 @@ mpls_arpinput(struct mbuf *m)
 /*
  * See ether_output in net/if_ethersubr.c for further details.
  */
-		if (ifatonhlfe_shortcut(mro->mro_ifa) != mro->mro_lle)
-			ifatonhlfe_shortcut(mro->mro_ifa) = mro->mro_lle;
+		if (mpls_lle(mro->mro_ifa) != mro->mro_lle)
+			mpls_lle(mro->mro_ifa) = mro->mro_lle;
 	
 		if (mro->mro_lle->la_hold != NULL) {
 			struct mbuf *m_hold, *m_hold_next;
@@ -636,7 +637,7 @@ void
 mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
 		const struct sockaddr *dst, struct llentry *lle)
 {	
-	struct sockaddr *gw = (struct sockkaddr *)dst;
+	struct sockaddr *gw = (struct sockaddr *)dst;
 	
 	struct mpls_ro mplsroute;
 	struct mpls_ro *mro;
@@ -677,7 +678,7 @@ mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
  * Collect segment on top of stack.
  */
 	shim = mtod(m, struct shim_hdr *);
-	seg = shim->shim_label & MPLS_LABEL_MASK;
+	satosmpls_label(seg) = shim->shim_label & MPLS_LABEL_MASK;
 /*
  * Strip off MPLS label stack and keep a copy.
  */
@@ -697,8 +698,8 @@ mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
  * Protocol Control Information (pci)
  * and get key x in fec.
  */
-	bzero(sftn, sizeof(sftn));
-	x = (struct sockadr *)&sftn;
+	bzero(&sftn, sizeof(sftn));
+	x = (struct sockaddr *)&sftn;
 	
 	switch (gw->sa_family) {
 	case AF_INET:
@@ -707,7 +708,7 @@ mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
 			goto bad;
 			
 		ip = mtod(m, struct ip *);
-    	satosin(nh)->sin_addr.s_addr = 
+    	satosin(x)->sin_addr.s_addr = 
     		ip->ip_dst.s_addr;
     	x->sa_len = sizeof(struct sockaddr_in);
 		break;
@@ -718,7 +719,7 @@ mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
 			goto bad;
 
 		ip6hdr = mtod(m, struct ip6_hdr *);
-    	satosin6(nh)->sin6_addr = ip6hdr->ip6_dst;
+    	satosin6(x)->sin6_addr = ip6hdr->ip6_dst;
     	x->sa_len = sizeof(struct sockaddr_in6);
 		break;
 #endif /* INET6 */
@@ -743,7 +744,7 @@ mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
 		
 #ifdef MPLS_DEBUG
 	(void)printf("%s: seg: %d -> %*D on %s\n", __func__, 
-		satosmpls_label_get(nh),
+		satosmpls_label_get(x),
 		ifp->if_addrlen, (u_char *)&lle->ll_addr.mac16, ":", 
 		if_name(ifp));
 #endif /* MPLS_DEBUG */
@@ -751,7 +752,7 @@ mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
 /*
  * X-connect.
  */	
-	ifatonhlfe_shortcut(mro->mro_ifa) = lle;
+	mpls_lle(mro->mro_ifa) = lle;
 	ifa_free(mro->mro_ifa);
 	gw = seg;
 done:	
