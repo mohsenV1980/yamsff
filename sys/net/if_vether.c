@@ -57,6 +57,8 @@
 #include <net/ethernet.h>
 #include <net/if_bridgevar.h>
 #include <net/if_llatbl.h>
+#include <net/netisr.h>
+
 
 /*
  * Virtual Ethernet interface, ported from OpenBSD. This interface 
