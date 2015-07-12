@@ -1,5 +1,5 @@
-Yet another MPLS stack for FreeBSD (yams)
-=========================================
+Yet another MPLS stack for FreeBSD (yamsff)
+===========================================
 
 This software is derived from present MPLS implementation in current OpenBSD
 release.
@@ -24,3 +24,5 @@ NOTE:
 NOTE: 	Stern warning: Do not use this software in production environments!
 
 Don't panic!!! I've started a refactoring cycle.
+
+Further, I'll add modefied ifconfig(8) and route(8) commands, after bugfixing.

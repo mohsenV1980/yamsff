@@ -110,7 +110,7 @@ int 	mpls_control(struct socket *, u_long, caddr_t,
 	struct ifnet *, struct thread *);
 
 /*
- * Locate nhlfe by its particular lsp (seg_out) and dst.
+ * Locate nhlfe by its particular lsp (seg_out) and dst (x).
  */
  
 struct ifaddr *
@@ -141,7 +141,7 @@ mpls_ifaof_ifpforlspdst(struct sockaddr *seg, struct sockaddr *x,
 		if (satosftn_label(ifa->ifa_dstaddr) != i) 
 			continue;
 		
-		sa = (struct sockaddr *)&mia_x(ifa);
+		sa = (struct sockaddr *)&mpls_x(ifa);
 
 		if (mpls_sa_equal(sa, x)) {
 			ifa_ref(ifa);
@@ -376,7 +376,7 @@ mpls_ifawithsegdst_fib(struct sockaddr *seg, struct sockaddr *x,
 			if (satosmpls_label(ifa->ifa_addr) != i) 
 				continue;
 			
-			sa = (struct sockaddr *)&mia_x(ifa);
+			sa = (struct sockaddr *)&mpls_x(ifa);
 			
 			if (mpls_sa_equal(sa, x)) {
 				ifa_ref(ifa);
@@ -424,7 +424,7 @@ mpls_ifaof_ifpforsegdst(struct sockaddr *seg, struct sockaddr *x,
 		if (satosmpls_label(ifa->ifa_addr) != i) 
 			continue;
 		
-		sa = (struct sockaddr *)&mia_x(ifa);
+		sa = (struct sockaddr *)&mpls_x(ifa);
 
 		if (mpls_sa_equal(sa, x)) {
 			ifa_ref(ifa);
@@ -475,7 +475,7 @@ mpls_ifawithdst_fib(struct sockaddr *x, int flags, u_int fibnum, int getref)
 			if (mpls_sa_equal(sa, x) == 0) 
 				continue;
 		
-			if (ifatonhlfe_flags(ifa) & flags) {
+			if (mpls_flags(ifa) & flags) {
 				ifa_ref(ifa);
 				IF_ADDR_RUNLOCK(ifp);
 				goto done;
@@ -512,12 +512,12 @@ mpls_ifaof_ifpfordst(struct sockaddr *x, int flags,
 		if (ifa->ifa_addr->sa_family != af)
 			continue;
 		
-		sa = (struct sockaddr *)&mia_x(ifa);
+		sa = (struct sockaddr *)&mpls_x(ifa);
 
 		if (mpls_sa_equal(sa, x) == 0) 
 			continue;
 		
-		if (ifatonhlfe_flags(ifa) & flags) {
+		if (mpls_flags(ifa) & flags) {
 			ifa_ref(ifa);
 			break;
 		}

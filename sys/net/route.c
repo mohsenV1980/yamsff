@@ -774,7 +774,7 @@ ifa_ifwithroute_fib(int flags, struct sockaddr *dst, struct sockaddr *gateway,
 	if (flags & RTF_MPLS) {
 		ifa = NULL;
 /*
- * Inclusion mapping by xconnect is 
+ * Inclusion mapping by x-connect is 
  * precondition for generating ilm by 
  * call of i. e. rt_request1(9).
  *

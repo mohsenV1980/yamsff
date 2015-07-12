@@ -308,6 +308,8 @@ struct mpls_ifaddr {
 	struct sockaddr_ftn 	mia_nh; 	/* nh x < op, seg_j, rd > */
 	struct sockaddr_ftn 	mia_x;
 	
+	int 	mia_flags;
+	
 	TAILQ_ENTRY(mpls_ifaddr)	mia_link;
 	
 	struct llentry 	*mia_lle; 	/* shortcut */	
@@ -479,6 +481,9 @@ struct mpls_ifinfo {
 	((struct mpls_ifinfo *)(ifp)->if_afdata[AF_MPLS])	
 #define MPLS_IFINFO_IFA(ifp) \
 	(((struct mpls_ifinfo *)(ifp)->if_afdata[AF_MPLS])->mii_nhlfe)	
+
+#define	MPLS_SEG(lle)	((struct sockaddr_mpls *)L3_ADDR(lle))
+#define	MPLS_SEG_LEN(lle)	L3_ADDR_LEN(lle)
 
 #define mpls_if_lladdr(_ifp) 	((_ifp)->if_addr->ifa_addr)
 

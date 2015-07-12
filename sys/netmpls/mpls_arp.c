@@ -152,13 +152,10 @@ extern int 	mpls_ip6_checkbasic(struct mbuf **);
  * XXX: Missing implementation about ARP statistics.
  */
  
-#define	MPLS_SEG(lle)	((struct sockaddr_mpls *)L3_ADDR(lle))
-#define	MPLS_SEG_LEN(lle)	L3_ADDR_LEN(lle)
-
 SYSCTL_DECL(_net_link_ether);
 SYSCTL_NODE(_net_link_ether, AF_MPLS, mpls, CTLFLAG_RW, 0, "");
 
-static int mpls_arp_by_fec = 0;
+static int mpls_arp = 0;
 static int mpls_arp_maxhold = 1;
 static int mpls_arp_maxtries = 5;
 
@@ -166,9 +163,9 @@ static int mpls_arp_maxtries = 5;
  * Release by nhlfe bound llentry{}.
  */
 static int
-sysctl_mpls_arp_by_fec(SYSCTL_HANDLER_ARGS)
+sysctl_mpls_arp(SYSCTL_HANDLER_ARGS)
 {
-	struct mpls_nhlfe *nhlfe;
+	struct mpls_ifaddr *nhlfe;
 	int enable = mpls_arp_by_fec;
 	int error;
 
@@ -178,8 +175,8 @@ sysctl_mpls_arp_by_fec(SYSCTL_HANDLER_ARGS)
 	if (enable != mpls_arp_by_fec) {
 		
 		NHLFE_WLOCK();
-		TAILQ_FOREACH(nhlfe, &mpls_iflist, nhlfe_link) {
-			nhlfe->mn_shortcut = NULL;
+		TAILQ_FOREACH(nhlfe, &mpls_iflist, mia_link) {
+			nhlfe->mia_lle = NULL;
 		}		
 		NHLFE_WUNLOCK();	
 		
@@ -187,9 +184,9 @@ sysctl_mpls_arp_by_fec(SYSCTL_HANDLER_ARGS)
 	}
 	return (error);
 }
-SYSCTL_PROC(_net_link_ether_mpls, OID_AUTO, use_arp_by_fec, 
-	CTLTYPE_INT|CTLFLAG_RW, &mpls_arp_by_fec, 0,  
-	&sysctl_mpls_arp_by_fec, "I", "Use ARP in domain of FEC");
+SYSCTL_PROC(_net_link_ether_mpls, OID_AUTO, mpls_arp, 
+	CTLTYPE_INT|CTLFLAG_RW, &mpls_arp, 0,  
+	&sysctl_mpls_arp, "I", "Use MPLS_ARP");
 SYSCTL_INT(_net_link_ether_mpls, OID_AUTO, arp_maxhold, CTLFLAG_RW,
 	&mpls_arp_maxhold, 0, 
 	"Number of packets to hold per MPLS_ARP entry");
@@ -212,7 +209,7 @@ void 	mpls_arpinput(struct mbuf *);
 void 	mpls_arpoutput(struct ifnet *, struct mbuf *, 
 	const struct sockaddr *, struct llentry *);
 int 	mpls_arpresolve(struct ifnet *, struct rtentry *, struct mbuf *, 
-	struct sockaddr *, u_char *, struct llentry **);
+	const struct sockaddr *, u_char *, struct llentry **);
 
 /*
  * Resolve particular lsp into lla. 

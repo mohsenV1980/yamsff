@@ -322,7 +322,7 @@ vether_start_locked(struct vether_softc	*sc, struct ifnet *ifp)
  * Enqueue, if transmission by bridge_output.
  */	
 			m->m_pkthdr.rcvif = ifp;
-			netisr_dispatch(isr, m);
+			netisr_dispatch(NETISR_ETHER, m);
 		} else {
 /*
  * Discard any duplicated MPI.
