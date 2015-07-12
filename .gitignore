@@ -4,6 +4,7 @@
 
 !/sys
 !/sys/Makefile
+!/sys/conf
 !/sys/conf/NOTES
 !/sys/conf/files
 !/sys/conf/options
