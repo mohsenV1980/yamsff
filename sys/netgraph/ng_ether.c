@@ -439,7 +439,8 @@ ng_ether_ifnet_arrival_event(void *arg __unused, struct ifnet *ifp)
 
 	/* Only ethernet interfaces are of interest. */
 	if (ifp->if_type != IFT_ETHER
-	    && ifp->if_type != IFT_L2VLAN)
+		&& ifp->if_type != IFT_VETHER 
+		&& ifp->if_type != IFT_L2VLAN)
 		return;
 
 	/*
@@ -899,7 +900,8 @@ vnet_ng_ether_init(const void *unused)
 	/* Create nodes for any already-existing Ethernet interfaces. */
 	IFNET_RLOCK();
 	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
-		if (ifp->if_type == IFT_ETHER
+		if (ifp->if_type == IFT_ETHER 
+			|| ifp->if_type == IFT_VETHER 
 		    || ifp->if_type == IFT_L2VLAN)
 			ng_ether_attach(ifp);
 	}
