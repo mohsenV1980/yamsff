@@ -439,7 +439,6 @@ ng_ether_ifnet_arrival_event(void *arg __unused, struct ifnet *ifp)
 
 	/* Only ethernet interfaces are of interest. */
 	if (ifp->if_type != IFT_ETHER
-		&& ifp->if_type != IFT_VETHER 
 		&& ifp->if_type != IFT_L2VLAN)
 		return;
 
@@ -729,7 +728,7 @@ ng_ether_rcv_lower(hook_p hook, item_p item)
 /*
  * Any frame still passes if_vether(4) is marked with M_PROTO2 flag. 
  */	
-	if (ifp->if_type == IFT_VETHER)
+	if (ifp->if_flags & IFF_VETHER)
 		m->m_flags |= M_PROTO2;
 
 	/* Send it on its way */
@@ -901,7 +900,6 @@ vnet_ng_ether_init(const void *unused)
 	IFNET_RLOCK();
 	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
 		if (ifp->if_type == IFT_ETHER 
-			|| ifp->if_type == IFT_VETHER 
 		    || ifp->if_type == IFT_L2VLAN)
 			ng_ether_attach(ifp);
 	}

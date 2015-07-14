@@ -182,9 +182,17 @@ struct if_data {
 #define	IFF_DYING	0x200000	/* (n) interface is winding down */
 #define	IFF_RENAMING	0x400000	/* (n) interface is being renamed */
 
+/*
+ * Indicates instance of if_vether(4).
+ */
+#define	IFF_VETHER	0x800000		/* (i) instance of if_vether(4) */
+
+/*
+ * Extensions targeting MPLS.
+ */
 #ifdef MPLS
-#define IFF_MPLS 	0x800000	/* (n) interface is being MPLS enabled */
-#define IFF_MPE 	0x1000000	/* (n) interface operates as PE (ingress) */
+#define IFF_MPLS 	0x1000000	/* (n) interface is being MPLS enabled */
+#define IFF_MPE 	0x2000000	/* (n) interface operates as PE (ingress) */
 #endif /* MPLS */
 
 /*
@@ -200,7 +208,7 @@ struct if_data {
 #define	IFF_CANTCHANGE \
 	(IFF_BROADCAST|IFF_POINTOPOINT|IFF_DRV_RUNNING|IFF_DRV_OACTIVE|\
 	    IFF_SIMPLEX|IFF_MULTICAST|IFF_ALLMULTI|IFF_SMART|IFF_PROMISC|\
-	    IFF_DYING|IFF_CANTCONFIG)
+	    IFF_DYING|IFF_CANTCONFIG|IFF_VETHER)
 
 /*
  * Values for if_link_state.

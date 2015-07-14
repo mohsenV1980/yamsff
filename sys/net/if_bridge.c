@@ -1016,7 +1016,6 @@ bridge_delete_member(struct bridge_softc *sc, struct bridge_iflist *bif,
 	if (!gone) {
 		switch (ifs->if_type) {
 		case IFT_ETHER:
-		case IFT_VETHER:
 		case IFT_L2VLAN:
 			/*
 			 * Take the interface out of promiscuous mode.
@@ -1088,7 +1087,6 @@ bridge_ioctl_add(struct bridge_softc *sc, void *arg)
 
 	switch (ifs->if_type) {
 	case IFT_ETHER:
-	case IFT_VETHER:
 	case IFT_L2VLAN:
 	case IFT_GIF:
 		/* permitted interface types */
@@ -1190,7 +1188,6 @@ bridge_ioctl_add(struct bridge_softc *sc, void *arg)
 	/* Place the interface into promiscuous mode */
 	switch (ifs->if_type) {
 		case IFT_ETHER:
-		case IFT_VETHER:
 		case IFT_L2VLAN:
 			BRIDGE_UNLOCK(sc);
 			error = ifpromisc(ifs, 1);
@@ -1623,7 +1620,6 @@ bridge_ioctl_addspan(struct bridge_softc *sc, void *arg)
 
 	switch (ifs->if_type) {
 		case IFT_ETHER:
-		case IFT_VETHER:
 		case IFT_GIF:
 		case IFT_L2VLAN:
 #ifdef MPLS
@@ -2403,7 +2399,7 @@ bridge_input(struct ifnet *ifp, struct mbuf *m)
  * with multi- / broadcast destination addresses
  * may cause (so called) broadcast storms.
  */
-	if (ifp->if_type == IFT_VETHER) 
+	if (ifp->if_flags & IFF_VETHER) 
 		return (m);
 	
 	BRIDGE_LOCK(sc);

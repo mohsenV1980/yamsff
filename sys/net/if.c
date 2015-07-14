@@ -1989,8 +1989,7 @@ do_link_state_change(void *arg, int pending)
 		(*vlan_link_state_p)(ifp);
 
 	if ((ifp->if_type == IFT_ETHER 
-		|| ifp->if_type == IFT_L2VLAN  
-		|| ifp->if_type == IFT_VETHER) &&
+		|| ifp->if_type == IFT_L2VLAN) &&
 	    IFP2AC(ifp)->ac_netgraph != NULL)
 		(*ng_ether_link_state_p)(ifp, link_state);
 	if (ifp->if_carp)
@@ -2242,7 +2241,6 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
  */
 			int s = splimp();				
 			if (ifp->if_type == IFT_ETHER
-				|| ifp->if_type == IFT_VETHER 
 				|| ifp->if_type == IFT_FDDI
 				|| ifp->if_type == IFT_LOOP) {
 				ifp->if_output = MPLS_IFINFO(ifp)->mii_output; 
@@ -2256,7 +2254,6 @@ ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
  */
 			int s = splimp();				
 			if (ifp->if_type == IFT_ETHER 
-				|| ifp->if_type == IFT_VETHER
 				|| ifp->if_type == IFT_FDDI
 				|| ifp->if_type == IFT_LOOP) {
 				MPLS_IFINFO(ifp)->mii_output = ifp->if_output;
@@ -3395,7 +3392,6 @@ if_setlladdr(struct ifnet *ifp, const u_char *lladdr, int len)
 	case IFT_ARCNET:
 	case IFT_IEEE8023ADLAG:
 	case IFT_IEEE80211:
-	case IFT_VETHER:
 		bcopy(lladdr, LLADDR(sdl), len);
 		ifa_free(ifa);
 		break;

@@ -194,14 +194,13 @@ vether_clone_create(struct if_clone *ifc, int unit, caddr_t data)
  
 	ifp->if_capabilities = IFCAP_VLAN_MTU|IFCAP_JUMBO_MTU;
 	ifp->if_capenable = IFCAP_VLAN_MTU|IFCAP_JUMBO_MTU;
-	ifp->if_flags = (IFF_SIMPLEX|IFF_BROADCAST|IFF_MULTICAST);
+	ifp->if_flags = (IFF_SIMPLEX|IFF_BROADCAST|IFF_MULTICAST|IFF_VETHER);
 	ifp->if_snd.ifq_maxlen = ifqmaxlen;
  
 	ifmedia_init(&sc->sc_ifm, 0, vether_media_change, vether_media_status);
 	ifmedia_add(&sc->sc_ifm, IFM_ETHER|IFM_AUTO, 0, NULL);
 	ifmedia_set(&sc->sc_ifm, IFM_ETHER|IFM_AUTO);
  	
- 	ifp->if_type = IFT_VETHER;
  	ifp->if_baudrate = 0;
  
 	sc->sc_status = IFM_AVALID;
