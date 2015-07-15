@@ -167,7 +167,9 @@ vether_clone_create(struct if_clone *ifc, int unit, caddr_t data)
 	struct ifnet *ifp;	
 	uint32_t randval;
 	uint8_t	lla[ETHER_ADDR_LEN];
- 
+/*
+ * Allocate software context.
+ */ 
 	sc = malloc(sizeof(struct vether_softc), M_VETHER, M_WAITOK|M_ZERO);
 	ifp = sc->sc_ifp = if_alloc(IFT_ETHER);
 	if (ifp == NULL) {
@@ -175,9 +177,29 @@ vether_clone_create(struct if_clone *ifc, int unit, caddr_t data)
 		return (ENOSPC);
 	}
 	if_initname(ifp, vether_name, unit);
-	
+/*
+ * Bind software context.
+ */ 	
 	VETHER_LOCK_INIT(sc);
 	ifp->if_softc = sc;
+/*
+ * Initialize specific attributes.
+ */ 
+	ifp->if_init = vether_init;
+	ifp->if_ioctl = vether_ioctl;
+	ifp->if_start = vether_start;
+ 
+ 	ifp->if_snd.ifq_maxlen = ifqmaxlen;
+ 	ifp->if_flags = (IFF_SIMPLEX|IFF_BROADCAST|IFF_MULTICAST|IFF_VETHER);
+ 
+	ifp->if_capabilities = IFCAP_VLAN_MTU|IFCAP_JUMBO_MTU;
+	ifp->if_capenable = IFCAP_VLAN_MTU|IFCAP_JUMBO_MTU;
+	
+	ifmedia_init(&sc->sc_ifm, 0, vether_media_change, vether_media_status);
+	ifmedia_add(&sc->sc_ifm, IFM_ETHER|IFM_AUTO, 0, NULL);
+	ifmedia_set(&sc->sc_ifm, IFM_ETHER|IFM_AUTO);
+ 	
+ 	sc->sc_status = IFM_AVALID;
 /*
  * Generate randomized lla.  
  */
@@ -185,26 +207,15 @@ vether_clone_create(struct if_clone *ifc, int unit, caddr_t data)
 	randval = arc4random();
 	memcpy(&lla[1], &randval, sizeof(uint32_t));
 	lla[5] = (uint8_t)unit; /* Interface major number */
- 
-	ether_ifattach(ifp, lla);
- 
-	ifp->if_init = vether_init;
-	ifp->if_ioctl = vether_ioctl;
-	ifp->if_start = vether_start;
- 
-	ifp->if_capabilities = IFCAP_VLAN_MTU|IFCAP_JUMBO_MTU;
-	ifp->if_capenable = IFCAP_VLAN_MTU|IFCAP_JUMBO_MTU;
-	ifp->if_flags = (IFF_SIMPLEX|IFF_BROADCAST|IFF_MULTICAST|IFF_VETHER);
-	ifp->if_snd.ifq_maxlen = ifqmaxlen;
- 
-	ifmedia_init(&sc->sc_ifm, 0, vether_media_change, vether_media_status);
-	ifmedia_add(&sc->sc_ifm, IFM_ETHER|IFM_AUTO, 0, NULL);
-	ifmedia_set(&sc->sc_ifm, IFM_ETHER|IFM_AUTO);
- 	
+/*
+ * Initialize ethernet specific attributes and perform inclusion 
+ * mapping on link layer, netgraph(4) domain and generate by bpf(4) 
+ * implemented Inspection Access Point maps to by ifnet(9) defined 
+ * generic interface.
+ */ 	
+ 	ether_ifattach(ifp, lla);
  	ifp->if_baudrate = 0;
  
-	sc->sc_status = IFM_AVALID;
-	
 	mtx_lock(&vether_list_mtx);
 	LIST_INSERT_HEAD(&vether_list, sc, vether_list);
 	mtx_unlock(&vether_list_mtx);
@@ -224,16 +235,26 @@ vether_clone_destroy(struct ifnet *ifp)
 	
 	sc = ifp->if_softc;	
  
+	VETHER_LOCK(sc);
 	vether_stop(ifp, 1);
-	ifp->if_flags &= ~IFF_UP;			
+	
+	ifp->if_flags &= ~IFF_UP;	
+	VETHER_UNLOCK(sc);		
 
 	mtx_lock(&vether_list_mtx);
 	LIST_REMOVE(sc, vether_list);
-	mtx_unlock(&vether_list_mtx);
+	mtx_unlock(&vether_list_mtx);	
+/*
+ * Inverse element of ether_ifattach.
+ */
+	ether_ifdetach(ifp);
+/*
+ * Release bound ressources.
+ */	
+	if_free(ifp);
 	
 	VETHER_LOCK_DESTROY(sc);
 	free(sc, M_VETHER);
-	ether_ifdetach(ifp);
 }
  
 /*
@@ -253,7 +274,7 @@ vether_init(void *xsc)
 }
  
 /*
- * Stops vether interface.
+ * Stops focussed instance of if_vether(4).
  */
 static void
 vether_stop(struct ifnet *ifp, int disable)
@@ -295,7 +316,7 @@ vether_start_locked(struct vether_softc	*sc, struct ifnet *ifp)
 			m_freem(m);
 			continue;
 		}
-		ETHER_BPF_MTAP(ifp, m);		
+		ETHER_BPF_MTAP(ifp, m);	
 /* 
  * Discard any frame, if not if_bridge(4) member.
  */				
@@ -311,20 +332,38 @@ vether_start_locked(struct vether_softc	*sc, struct ifnet *ifp)
 			if ((m->m_flags & M_PROTO2) == 0) {
 				m_freem(m);
 				continue;
-			}			
+			}
+			ifp->if_opackets++;			
+/* 
+ * Discard any frame, if monitoring is enabled.
+ */		
+			if (ifp->if_flags & IFF_MONITOR) {
+				m_freem(m);
+				continue;
+			}	
 			m->m_pkthdr.rcvif = ifp;
 			m->m_flags &= ~M_PROTO2;
+			
 /*
  * Broadcast frame via if_bridge(4).
  */			
 			BRIDGE_OUTPUT(ifp, m, error);	
-		} else if (m->m_pkthdr.rcvif != ifp) {	
+		} else if (m->m_pkthdr.rcvif != ifp) {
+			ifp->if_ipackets++;			
+/* 
+ * Discard any frame, if monitoring is enabled.
+ */		
+			if (ifp->if_flags & IFF_MONITOR) {
+				m_freem(m);
+				continue;
+			}
 /*
  * Enqueue, if transmission by bridge_output.
  */	
 			m->m_pkthdr.rcvif = ifp;
 			netisr_dispatch(NETISR_ETHER, m);
 		} else {
+			ifp->if_opackets++;	
 /*
  * Discard any duplicated MPI.
  */ 		
