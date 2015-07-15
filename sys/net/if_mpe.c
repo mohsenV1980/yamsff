@@ -150,51 +150,50 @@ static int	mpe_ioctl(struct ifnet *, u_long, caddr_t);
 static int
 mpe_clone_create(struct if_clone *ifc, int unit, caddr_t data)
 {
-	struct ifnet *ifp;
 	struct mpe_softc *sc;
-	int error = 0;
-
+	struct ifnet *ifp;
+	
  	sc = malloc(sizeof(*sc), M_DEVBUF, M_WAITOK|M_ZERO);
  	ifp = sc->sc_ifp = if_alloc(IFT_MPLS);
 	if (ifp == NULL) {
 		free(sc, M_DEVBUF);
-		error = ENOSPC;
-		goto out;
+		return (ENOSPC);
 	}	
 	if_initname(ifp, mpe_name, unit);
 	
+	MPE_LOCK_INIT(sc);
+/*
+ * Map instance to itself.
+ */			
+	sc->sc_proxy = ifp;
 	ifp->if_softc = sc; 
-	ifp->if_mtu = MPE_MTU;
-	ifp->if_flags = IFF_BROADCAST|IFF_MULTICAST|IFF_MPLS;
+	
 	ifp->if_ioctl = mpe_ioctl;
 	ifp->if_input = mpe_input;
 	ifp->if_output = mpe_output;
 	ifp->if_init = mpe_init;
 	ifp->if_start = mpe_start;
+	
+	ifp->if_flags = (IFF_BROADCAST|IFF_MULTICAST|IFF_MPLS);
 
 	IFQ_SET_MAXLEN(&ifp->if_snd, ifqmaxlen);
 	ifp->if_snd.ifq_drv_maxlen = ifqmaxlen;
 	IFQ_SET_READY(&ifp->if_snd);
 
+	ifp->if_mtu = MPE_MTU;
+ 	
  	if_attach(ifp);
  	bpfattach(ifp, DLT_NULL, sizeof(uint32_t));
- 
- 	MPE_LOCK_INIT(sc);
+ 	
  	mtx_lock(&mpe_list_mtx);
-/*
- * Map instance to itself.
- */			
-	sc->sc_proxy = ifp;
-	
 	LIST_INSERT_HEAD(&mpeif_list, sc, sc_list);
+	mtx_unlock(&mpe_list_mtx);
 	
 	ifp->if_drv_flags |= IFF_DRV_RUNNING;
 	ifp->if_drv_flags &= ~IFF_DRV_OACTIVE;
 	ifp->if_flags |= IFF_UP;
 	
-	mtx_unlock(&mpe_list_mtx);
-out:
-	return (error);
+	return (0);
 }
 
 /*
@@ -218,7 +217,6 @@ mpe_clone_destroy(struct ifnet *ifp)
 static int
 mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 {
-	struct ifaliasreq *ifra = (struct ifaliasreq *)data;
 	struct ifreq *ifr = (struct ifreq *)data;
 	struct mpe_softc *sc = ifp->if_softc;
 	struct sockaddr_mpls *smpls;
@@ -227,7 +225,7 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 	int error;
 
 	error = 0;
-	ifa = NULL;	
+	ifa = NULL;
 		
 	switch (cmd) {
 	case SIOCADDMULTI:
@@ -254,12 +252,43 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		break;
 	case SIOCGLIFPHYADDR:
 /*
- * XXX: some changes... under construction.
+ * Get lla from proxy, if any
  */			
+		smpls = (struct sockaddr_mpls *)
+			&(((struct if_laddrreq *)data)->addr);
+		sdl = (struct sockaddr_dl *)
+			&(((struct if_laddrreq *)data)->dstaddr);
+		
+		if (smpls->smpls_family != AF_MPLS) {
+			error = EAFNOSUPPORT;
+			break;
+		}	
+		
+		if (sdl->sdl_family != AF_LINK) {
+			error = EAFNOSUPPORT;
+			break;
+		}	
+		
+		if (sdl->sdl_len != sizeof(*sdl)) {
+			error = EINVAL;
+			break;
+		}	
+		
+		if (sc->sc_proxy == NULL || sc->sc_proxy == ifp) {
+			error = EADDRNOTAVAIL;
+			break;
+		}
+		bcopy(sc->sc_proxy->if_addr->ifa_addr, sdl, 
+			sc->sc_proxy->if_addr->ifa_addr->sa_len);
 		break;
 	case SIOCSIFPHYADDR:
-		smpls = (struct sockaddr_mpls *)&ifra->ifra_addr;
-		sdl = (struct sockaddr_dl *)&ifra->ifra_broadaddr;
+/*
+ * Bind interface for proxyfied transmission.
+ */			
+		smpls = (struct sockaddr_mpls *)
+			&(((struct ifaliasreq *)data)->ifra_addr);
+		sdl = (struct sockaddr_dl *)
+			&(((struct ifaliasreq *)data)->ifra_broadaddr);
 		
 		if (smpls->smpls_family != AF_MPLS) {
 			error = EAFNOSUPPORT;
@@ -280,7 +309,7 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		}
 		ifa_ref(ifa);					
 /*
- * Fetch target interface by its desceptive name.
+ * Fetch target interface by its name.
  */	
 		sc->sc_proxy = ifunit(sdl->sdl_data);
 		if (sc->sc_proxy == NULL) {
@@ -310,6 +339,9 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		}
 		break;
 	case SIOCDIFPHYADDR:
+/*
+ * Detach for proxyfied transmission used interface.
+ */		
 		smpls = (struct sockaddr_mpls *)&ifr->ifr_addr;
 		
 		if (smpls->smpls_family != AF_MPLS) {
@@ -325,7 +357,9 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			break;
 		}
 		ifa_ref(ifa);
-			
+/*
+ * Remove segment corrosponding llentry{} from cache.
+ */			
 		lltable_prefix_free(ifa->ifa_addr->sa_family, 
 			ifa->ifa_addr, NULL, 0);	
 /*

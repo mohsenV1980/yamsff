@@ -6,6 +6,7 @@
 !/sbin/ifconfig/Makefile
 !/sbin/ifconfig/ifconfig.c
 !/sbin/ifconfig/af_mpls.c
+!/sbin/ifconfig/ifmpe.c
 
 !/sys
 !/sys/Makefile
