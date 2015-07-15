@@ -696,9 +696,10 @@ mpls_purgeaddr(struct ifaddr *ifa)
 	seg = (struct sockaddr *)&smpls;
 	
 	switch (ifp->if_type) {
-	case IFT_ETHER:
-	case IFT_VETHER:	/* FALLTHROUGH */
-	case IFT_FDDI:
+	case IFT_ETHER:	
+	case IFT_FDDI: 	
+					/* FALLTHROUGH */
+					
 		lltable_prefix_free(seg->sa_family, seg, NULL, 0);		
 		break;
 	case IFT_LOOP:	

@@ -219,20 +219,24 @@ static int
 mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 {
 	struct ifaliasreq *ifra = (struct ifaliasreq *)data;
-	struct if_laddrreq *iflr = (struct if_laddrreq *)data;
 	struct ifreq *ifr = (struct ifreq *)data;
-	struct ifaddr *ifa = (struct ifaddr *)data;
 	struct mpe_softc *sc = ifp->if_softc;
+	struct sockaddr_mpls *smpls;
 	struct sockaddr_dl *sdl;
+	struct ifaddr *ifa;
 	int error;
 
 	error = 0;
-
+	ifa = NULL;	
+		
 	switch (cmd) {
 	case SIOCADDMULTI:
 	case SIOCDELMULTI:
 		break;
 	case SIOCSIFADDR:
+	
+		if ((ifa = (struct ifaddr *)data) != NULL)
+			ifa_ref(ifa);
 		
 		if ((ifp->if_flags & IFF_UP) == 0)
 			if_up(ifp);
@@ -247,6 +251,87 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
  */		
 		if (ifa != NULL && ifa->ifa_flags & IFA_NHLFE)
 			sc->sc_proxy = ifp;		
+		break;
+	case SIOCGLIFPHYADDR:
+/*
+ * XXX: some changes... under construction.
+ */			
+		break;
+	case SIOCSIFPHYADDR:
+		smpls = (struct sockaddr_mpls *)&ifra->ifra_addr;
+		sdl = (struct sockaddr_dl *)&ifra->ifra_broadaddr;
+		
+		if (smpls->smpls_family != AF_MPLS) {
+			error = EAFNOSUPPORT;
+			break;
+		}
+		
+		if (sdl->sdl_family != AF_LINK) {
+			error = EAFNOSUPPORT;
+			break;
+		}	
+		IF_AFDATA_RLOCK(ifp);	
+		ifa = MPLS_IFINFO_IFA(ifp);
+		IF_AFDATA_RUNLOCK(ifp);	
+ 		
+ 		if (ifa == NULL) {
+			error = EADDRNOTAVAIL;
+			break;
+		}
+		ifa_ref(ifa);					
+/*
+ * Fetch target interface by its desceptive name.
+ */	
+		sc->sc_proxy = ifunit(sdl->sdl_data);
+		if (sc->sc_proxy == NULL) {
+			error = EADDRNOTAVAIL;
+			break;
+		}
+/*
+ * Finally, map requested proxy to focussed instance, iff 
+ * target remains in MPLS enabled state and its type does 
+ * not denotes IFT_MPLS or IFT_LOOP.
+ */	
+		switch (sc->sc_proxy->if_type) {
+		case IFT_ETHER:
+		case IFT_FDDI:
+/*
+ * Create by segment on particular lsp corrosponding llentry{}. 
+ */
+			if (sc->sc_proxy->if_flags & IFF_MPLS) { 
+				error = (*sc->sc_proxy->if_ioctl)
+					(sc->sc_proxy, SIOCSIFADDR, (void *)ifa);
+			} else
+				error = ENXIO;		
+			break;
+		default:
+			error = EADDRNOTAVAIL;
+			break;	
+		}
+		break;
+	case SIOCDIFPHYADDR:
+		smpls = (struct sockaddr_mpls *)&ifr->ifr_addr;
+		
+		if (smpls->smpls_family != AF_MPLS) {
+			error = EAFNOSUPPORT;
+			break;
+		}
+		IF_AFDATA_RLOCK(ifp);	
+		ifa = MPLS_IFINFO_IFA(ifp);
+		IF_AFDATA_RUNLOCK(ifp);	
+ 		
+ 		if (ifa == NULL) {
+			error = EADDRNOTAVAIL;
+			break;
+		}
+		ifa_ref(ifa);
+			
+		lltable_prefix_free(ifa->ifa_addr->sa_family, 
+			ifa->ifa_addr, NULL, 0);	
+/*
+ * Reflexive mapping.
+ */		
+		sc->sc_proxy = ifp;
 		break;
 	case SIOCSIFFLAGS:
 	
@@ -263,109 +348,14 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		else
 			ifp->if_mtu = ifr->ifr_mtu;
 		break;
-	case SIOCGLIFPHYADDR:
-		
-		sdl = (struct sockaddr_dl *)&iflr->addr;
-		if ((sdl->sdl_len != sizeof(*sdl))
-			|| (sdl->sdl_family != AF_LINK)) {
-			error = EINVAL; 
-			break;
-		}
-		
-		if ((sc->sc_proxy == ifp)
-			|| (sc->sc_proxy == NULL)) {
-			error = EADDRNOTAVAIL;
-			break;
-		}
-		ifa_ref(sc->sc_proxy->if_addr);
-		ifa = sc->sc_proxy->if_addr;
-		
-		bcopy(ifa->ifa_addr, sdl, 
-			ifa->ifa_addr->sa_len); 
-			
-		ifa_free(ifa);
-		break;
-	case SIOCSIFPHYADDR:
-/*
- * Provides access to broadcast media by 
- * associated link-layer interfaces for
- * proxyfied transmission.
- */		
-		IF_AFDATA_RLOCK(ifp);	
-		ifa = MPLS_IFINFO_IFA(ifp);
-		IF_AFDATA_RUNLOCK(ifp);	
-		
-		if (ifa != NULL) 
-			ifa_ref(ifa);
-		
-		if (ifa == NULL) {
-			error = EADDRNOTAVAIL;
-			break;
-		}
-		sdl = (struct sockaddr_dl *)&ifra->ifra_addr;	
-/*
- * Fetch target interface by its desceptive name.
- */	
-		sc->sc_proxy = ifunit(sdl->sdl_data);
-		if (sc->sc_proxy == NULL) {
-			error = EADDRNOTAVAIL;
-			break;
-		}
-/*
- * Finally, map requested proxy to focussed instance, iff 
- * target remains in MPLS enabled state and its type does 
- * not denotes IFT_MPLS or IFT_LOOP.
- */	
-		switch (sc->sc_proxy->if_type) {
-		case IFT_ETHER:
-		case IFT_VETHER:
-		case IFT_FDDI:
-/*
- * Create by segment on particular lsp corrosponding llentry{}. 
- */
-			if (sc->sc_proxy->if_flags & IFF_MPLS) { 
-				error = (*sc->sc_proxy->if_ioctl)
-					(sc->sc_proxy, SIOCSIFADDR, (void *)ifa);
-			} else
-				error = ENXIO;		
-			break;
-		default:
-			error = EADDRNOTAVAIL;
-			break;	
-		}
-		
-		if (ifa != NULL) 
-			ifa_free(ifa);
-		break;
-	case SIOCDIFPHYADDR:
-/*
- * If SPI not in in AF_LINK, remove with proxy associated
- * llentry{} and unbound instance of mapped link layer 
- * interface for proxyfied tx by reflexive mapping.
- */		
- 		IF_AFDATA_RLOCK(ifp);	
-		ifa = MPLS_IFINFO_IFA(ifp);
-		IF_AFDATA_RUNLOCK(ifp);	
-		
-		if (ifa != NULL) 
-			ifa_ref(ifa);
-		
-		if (ifa == NULL) {
-			error = EADDRNOTAVAIL;
-			break;
-		}
-		lltable_prefix_free(ifa->ifa_addr->sa_family, 
-			ifa->ifa_addr, NULL, 0);	
-		
-		sc->sc_proxy = ifp;
-		
-		if (ifa != NULL) 
-			ifa_free(ifa);
-		break;
 	default:
 		error = EOPNOTSUPP;	
 		break;
 	}
+	
+	if (ifa != NULL) 
+		ifa_free(ifa);
+			
 	return (error);
 }
 

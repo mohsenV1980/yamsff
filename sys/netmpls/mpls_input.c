@@ -457,7 +457,6 @@ do_v6:
 do_link:			
 					switch (ifp->if_type) {
 					case IFT_ETHER:
-					case IFT_VETHER:
 					case IFT_FDDI:
 						
 						if ((m = mpls_shim_pop(m)) == NULL)  

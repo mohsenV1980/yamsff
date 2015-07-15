@@ -721,7 +721,10 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		error = 0;
 		break;
 	default:
-	
+		if (ifp == NULL || ifp->if_ioctl == NULL) {
+			error = EOPNOTSUPP;
+			break;
+		}
 		error = (*ifp->if_ioctl)(ifp, cmd, data);
 		break;
 	}	
@@ -1020,7 +1023,6 @@ mpls_domifdetach(struct ifnet *ifp, void *aux)
 
 	switch (ifp->if_type) {
 	case IFT_ETHER:
-	case IFT_VETHER:
 	case IFT_FDDI:
 	case IFT_LOOP:
 		

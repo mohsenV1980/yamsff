@@ -155,7 +155,7 @@ extern int 	mpls_ip6_checkbasic(struct mbuf **);
 SYSCTL_DECL(_net_link_ether);
 SYSCTL_NODE(_net_link_ether, AF_MPLS, mpls, CTLFLAG_RW, 0, "");
 
-static int mpls_arp = 0;
+static int mpls_arp = 1;
 static int mpls_arp_maxhold = 1;
 static int mpls_arp_maxtries = 5;
 
@@ -800,9 +800,9 @@ mpls_arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 	
 	switch (ifp->if_type) {
 	case IFT_ETHER: 	
-	case IFT_FDDI: 	/* FALLTHROUGH */
-	case IFT_VETHER:	
-	
+	case IFT_FDDI: 
+					/* FALLTHROUGH */
+					
 		lle = lla_lookup(llt, LLE_CREATE, smplstosa(seg));
 		if (lle == NULL) {
 			log(LOG_INFO, 

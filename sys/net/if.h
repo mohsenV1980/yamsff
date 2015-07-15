@@ -182,13 +182,15 @@ struct if_data {
 #define	IFF_RENAMING	0x400000	/* (n) interface is being renamed */
 
 /*
- * Indicates instance of if_vether(4).
+ * Extension, indicates instance of if_vether(4).
  */
 #define	IFF_VETHER	0x800000		/* (i) instance of if_vether(4) */
 
 /*
  * Extensions targeting MPLS.
  */
+#include "opt_mpls.h"
+
 #ifdef MPLS
 #define IFF_MPLS 	0x1000000	/* (n) interface is being MPLS enabled */
 #define IFF_MPE 	0x2000000	/* (n) interface operates as PE (ingress) */
