@@ -4,30 +4,26 @@ Yet another MPLS stack for FreeBSD (yamsff)
 This software is derived from present MPLS implementation in current OpenBSD
 release.
 
-NOTE:	This stuff compiles, but MPLS related components are untested!!!.
-NOTE:
-NOTE:	At the moment, I'm using github as online storage for something 
-NOTE:	I've started (re-)developing. Yet, it is better then storing all  
-NOTE:	stuff locally on my (insecure) workstation.
-NOTE:
-NOTE: 	Therfore, this software is under active developement and far from
-NOTE: 	correctness and contains (some serious) flaws implecitely.
+NOTE:	This software and its components are under active developement and far
+NOTE: 	from correctness and containing (some serious) flaws implecitely.
 NOTE: 	
-NOTE: 	Due to the upcoming Operating System Crisis in software industry, 
-NOTE: 	purpose of this operation is to teach myself about MPLS and protocol
+NOTE: 	Purpose of this operation is to teach myself about MPLS and protocol
 NOTE: 	integration in kernel space of BSD based OS's or OS's where its
 NOTE: 	implementation of system or network protocols is based or derived 
-NOTE:	from codebase of BSD based OS's.
+NOTE:	from codebase of BSD based OS's for a better understanding the 
+NOTE:   underlying principles for designing and implementing of operating 
+NOTE:   systems in general.
 NOTE: 	
 NOTE: 	Stern warning: Do not use this software in production environments!
 
 Next tasks:
 -----------
  
- o Testing components relating MPLS.
+ o Testing components and bugfixes.
  o Adding modefied ifconfig(8) and route(8) commands.
  o Writing detailed implementation notes.
- o Starting IPv6 integration. 
+ o Starting of tasks for a better understanding of 
+   IPv6 implementation in sys/netinet6. 
 
-Btw, I am a very busy person.
+
 

@@ -133,8 +133,6 @@ static void	mpe_clone_destroy(struct ifnet *);
 static struct if_clone *mpe_cloner;
 static const char mpe_name[] = "mpe";
 
-static MALLOC_DEFINE(M_MPE, mpe_name, "mpe interface");
-
 static struct mtx mpe_list_mtx;
 static LIST_HEAD(, mpe_softc) mpeif_list;
 
@@ -156,10 +154,10 @@ mpe_clone_create(struct if_clone *ifc, int unit, caddr_t data)
 	struct mpe_softc *sc;
 	int error = 0;
 
- 	sc = malloc(sizeof(*sc), M_MPE, M_WAITOK|M_ZERO);
+ 	sc = malloc(sizeof(*sc), M_DEVBUF, M_WAITOK|M_ZERO);
  	ifp = sc->sc_ifp = if_alloc(IFT_MPLS);
 	if (ifp == NULL) {
-		free(sc, M_MPE);
+		free(sc, M_DEVBUF);
 		error = ENOSPC;
 		goto out;
 	}	
@@ -213,7 +211,7 @@ mpe_clone_destroy(struct ifnet *ifp)
 	mtx_unlock(&mpe_list_mtx);
 	bpfdetach(ifp);
 	if_detach(ifp);
-	free(sc, M_MPE);
+	free(sc, M_DEVBUF);
 }
 
 /* ARGSUSED */
@@ -598,7 +596,7 @@ mpe_alloc(u_char type, struct ifnet *ifp)
 {
 	struct arpcom *ac;
 
-	ac = malloc(sizeof(struct arpcom), M_MPE, M_WAITOK|M_ZERO);
+	ac = malloc(sizeof(struct arpcom), M_DEVBUF, M_WAITOK|M_ZERO);
 	ac->ac_ifp = ifp;
 
 	return (ac);
@@ -608,7 +606,7 @@ static void
 mpe_free(void *com, u_char type)
 {
 
-	free(com, M_MPE);
+	free(com, M_DEVBUF);
 }
 
 /*

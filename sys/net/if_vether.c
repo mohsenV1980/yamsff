@@ -146,7 +146,6 @@ static const char vether_name[] = "vether";
 static LIST_HEAD(, vether_softc) vether_list;
 
 static struct mtx vether_list_mtx;
-static MALLOC_DEFINE(M_VETHER, vether_name, "Virtual Ethernet interface");
 
 static void	vether_init(void *);
 static void	vether_stop(struct ifnet *, int);
@@ -170,10 +169,10 @@ vether_clone_create(struct if_clone *ifc, int unit, caddr_t data)
 /*
  * Allocate software context.
  */ 
-	sc = malloc(sizeof(struct vether_softc), M_VETHER, M_WAITOK|M_ZERO);
+	sc = malloc(sizeof(struct vether_softc), M_DEVBUF, M_WAITOK|M_ZERO);
 	ifp = sc->sc_ifp = if_alloc(IFT_ETHER);
 	if (ifp == NULL) {
-		free(sc, M_VETHER);
+		free(sc, M_DEVBUF);
 		return (ENOSPC);
 	}
 	if_initname(ifp, vether_name, unit);
@@ -254,7 +253,7 @@ vether_clone_destroy(struct ifnet *ifp)
 	if_free(ifp);
 	
 	VETHER_LOCK_DESTROY(sc);
-	free(sc, M_VETHER);
+	free(sc, M_DEVBUF);
 }
  
 /*
