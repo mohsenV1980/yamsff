@@ -57,8 +57,6 @@
 #include <net/ethernet.h>
 #include <net/if_bridgevar.h>
 #include <net/if_llatbl.h>
-#include <net/netisr.h>
-
 
 /*
  * Virtual Ethernet interface, ported from OpenBSD. This interface 
@@ -363,11 +361,11 @@ vether_start_locked(struct vether_softc	*sc, struct ifnet *ifp)
 				m_freem(m);
 				continue;
 			}
-/*
- * Enqueue, if transmission by bridge_output.
- */	
 			m->m_pkthdr.rcvif = ifp;
-			netisr_dispatch(NETISR_ETHER, m);
+/*
+ * Demultiplex Ethernet frame by ether_input.
+ */	
+			(*ifp->if_input)(ifp, m);
 		} else {
 /*
  * Discard any duplicated frame.
