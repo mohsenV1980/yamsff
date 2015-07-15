@@ -2388,8 +2388,7 @@ bridge_input(struct ifnet *ifp, struct mbuf *m)
 		bifp->if_ibytes += m->m_pkthdr.len;
 		m_freem(m);
 		return (NULL);
-	}
-	
+	}	
 /*
  * Push back any by if_vether(4) received frame
  * for local processing. Those kind of interfaces

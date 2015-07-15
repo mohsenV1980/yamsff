@@ -279,13 +279,14 @@ static void
 vether_stop(struct ifnet *ifp, int disable)
 {
 	struct vether_softc *sc;
+	
 	sc = ifp->if_softc;
 	VETHER_LOCK_ASSERT(sc);
 	ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
 }	
  
 /*
- * Starts transmission of frames.
+ * I/O.
  */
 static void
 vether_start(struct ifnet *ifp)
@@ -315,16 +316,27 @@ vether_start_locked(struct vether_softc	*sc, struct ifnet *ifp)
 			m_freem(m);
 			continue;
 		}
-		ETHER_BPF_MTAP(ifp, m);	
+		
+		if (m->m_pkthdr.rcvif == NULL) {
+/*
+ * IAP for transmission.
+ */				
+			ETHER_BPF_MTAP(ifp, m);
+			ifp->if_opackets++;	
 /* 
  * Discard any frame, if not if_bridge(4) member.
  */				
-		if (ifp->if_bridge == NULL) {
-			m_freem(m);
-			continue;
-		}
-		
-		if (m->m_pkthdr.rcvif == NULL) {
+			if (ifp->if_bridge == NULL) {
+				m_freem(m);
+				continue;
+			}			
+/* 
+ * Discard any frame, if monitoring is enabled.
+ */		
+			if (ifp->if_flags & IFF_MONITOR) {
+				m_freem(m);
+				continue;
+			}
 /* 
  * Discard, if frame not passed ng_ether_rcv_lower.
  */
@@ -332,23 +344,18 @@ vether_start_locked(struct vether_softc	*sc, struct ifnet *ifp)
 				m_freem(m);
 				continue;
 			}
-			ifp->if_opackets++;			
-/* 
- * Discard any frame, if monitoring is enabled.
- */		
-			if (ifp->if_flags & IFF_MONITOR) {
-				m_freem(m);
-				continue;
-			}	
-			m->m_pkthdr.rcvif = ifp;
 			m->m_flags &= ~M_PROTO2;
-			
+			m->m_pkthdr.rcvif = ifp;			
 /*
  * Broadcast frame via if_bridge(4).
  */			
 			BRIDGE_OUTPUT(ifp, m, error);	
 		} else if (m->m_pkthdr.rcvif != ifp) {
-			ifp->if_ipackets++;			
+/*
+ * IAP for reception.
+ */				
+			ETHER_BPF_MTAP(ifp, m);	
+			ifp->if_ipackets++;	
 /* 
  * Discard any frame, if monitoring is enabled.
  */		
@@ -362,9 +369,8 @@ vether_start_locked(struct vether_softc	*sc, struct ifnet *ifp)
 			m->m_pkthdr.rcvif = ifp;
 			netisr_dispatch(NETISR_ETHER, m);
 		} else {
-			ifp->if_opackets++;	
 /*
- * Discard any duplicated MPI.
+ * Discard any duplicated frame.
  */ 		
 			m_freem(m);
 			continue;
