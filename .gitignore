@@ -2,6 +2,11 @@
 !/.gitignore
 !/README
 
+!/sbin/ifconfig
+!/sbin/ifconfig/Makefile
+!/sbin/ifconfig/ifconfig.c
+!/sbin/ifconfig/af_mpls.c
+
 !/sys
 !/sys/Makefile
 !/sys/conf
@@ -11,13 +16,13 @@
 
 !/sys/modules
 !/sys/modules/if_bridge
-!/sys/modules/if_bridge/*
+!/sys/modules/if_bridge/Makefile
 
 !/sys/modules/if_mpe
-!/sys/modules/if_mpe/*
+!/sys/modules/if_mpe/Makefile
 
 !/sys/modules/if_vether
-!/sys/modules/if_vether/*
+!/sys/modules/if_vether/Makefile
 
 !/sys/net
 !/sys/net/if.c

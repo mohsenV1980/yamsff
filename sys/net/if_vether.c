@@ -363,7 +363,7 @@ vether_start_locked(struct vether_softc	*sc, struct ifnet *ifp)
 			}
 			m->m_pkthdr.rcvif = ifp;
 /*
- * Demultiplex Ethernet frame by ether_input.
+ * Demultiplex frame by ether_input.
  */	
 			(*ifp->if_input)(ifp, m);
 		} else {
