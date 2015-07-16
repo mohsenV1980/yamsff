@@ -233,17 +233,23 @@ mpls_dummynet(struct mbuf *m, struct ifnet *ifp)
 }
 
 /*
- * Receives MPI either enqueued by if_simloop, 
- * ether_demux or by mpe_input.
+ * Receive mbuf(9) originating
+ *
+ *  (a) if_simloop, 
+ *  (b) ether_demux 
+ *
+ * or 
+ *  
+ *  (c) mpe_input.
  * 
  * If Label remains Bottom of Stack (BoS) and denotes 
- * reserved value (but it is not MPLS_LABEL_IMPLNULL), 
- * MPI will be passed to higher layer by label value 
- * mapped input procedure call. 
+ * reserved MPLS label value (but its value denotes not 
+ * MPLS_LABEL_IMPLNULL), mbuf(9)_ will be passed to higher 
+ * its layer by label value mapped input procedure call. 
  * 
- * Further, if label denotes MPLS_RTALERT and its 
- * position is not BoS, then MPIs are passed into 
- * socket layer (directly) by mpls_rtalert_input.
+ * Further, if MPLS label value denotes MPLS_RTALERT and its 
+ * position is not BoS, then pdu containing mbuf(9) is passed 
+ * into socket layer (directly) by mpls_rtalert_input.
  * 
  * Any other cases are handled by mpls_forward.
  */
@@ -302,18 +308,18 @@ mpls_input(struct mbuf *m)
  * explicit NULL labels. The no longer need
  * to be at the beginning of the stack.
  */
-		if (hasbos != 0) 
-			break;
+		if (hasbos == 0) 
+			goto bad;
 					
-		goto bad;
+		break;
 	case MPLS_LABEL_RTALERT:
 /*
  * Must be on top of stack.
  */		
-		if (hasbos == 0)
-			break;
+		if (hasbos != 0)
+			goto bad;
 				
-		goto bad;
+		break;
 	default:
 		mpls_forward(m, 0);
 		return;
@@ -325,14 +331,15 @@ mpls_input(struct mbuf *m)
 		MPLS_TTL_GET(shim->shim_label), 
 		MPLS_BOS(shim->shim_label));
 #endif /* MPLS_DEBUG */	
-	mplssw[MPLS_LABEL_GET(shim->shim_label)].pr_input(m, 0);
+	
+	(*mplssw[MPLS_LABEL_GET(shim->shim_label)].pr_input)(m, 0);
 	return;	
 bad:
 	m_freem(m);	
 }
 
 /*
- * Validate ttl and decrement. If invalid, pdu 
+ * Validate ttl and decrement. If invalid, sdu 
  * is replaced by icmp packet as exception 
  * handling. 
  *
@@ -342,12 +349,20 @@ bad:
  *	   reserved labels, pop and reiterate, if any.
  *
  *  2. Use incoming label as key for routing table
- *     and fetch ilm, if exists.
+ *     and fetch ilm, if any.
  *
  *  3. Perform by rt_gateway encoded operation.
  *
- *  4. Forward pdu or pass sdu into link-layer 
- *     or protocol-layer, if possible. 
+ *  4. Forward pdu or demultiplex and pass sdu
+ *     either into 
+ *
+ *       (a) link-layer
+ * 
+ *     or 
+ * 
+ *       (b) protocol-layer, 
+ *
+ *     if possible. 
  */
 void
 mpls_forward(struct mbuf *m, int off __unused)
@@ -385,13 +400,10 @@ mpls_forward(struct mbuf *m, int off __unused)
 	seg->smpls_len = sizeof(*seg);
 	seg->smpls_family = AF_MPLS;
 	
-	gw = (struct sockaddr *)seg;
-	
 	for (i = 0; i < mpls_inkloop; i++) {
 	
 		seg->smpls_label = shim->shim_label & MPLS_LABEL_MASK;
 		hasbos = MPLS_BOS(shim->shim_label);
-		
 		
 #ifdef MPLS_DEBUG
 		(void)printf(" | %02d: label %d ttl %d bos %d\n", 
@@ -607,7 +619,7 @@ mpls_pfil(struct mbuf **mp, struct ifnet *ifp, int dir)
 	if (ifp == NULL || *mp == NULL)
 		goto done;
 		
-	if (mpls_pfil_hook == 0 && mpls_pfil_ipfw == 0) {
+	if (mpls_pfil_hook == 0) {
 		error = 0; /* filtering is disabled */
 		goto done;
 	}

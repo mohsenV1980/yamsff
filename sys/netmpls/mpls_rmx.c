@@ -319,7 +319,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		log(LOG_INFO, "%s: dst in fec invalid\n", __func__);
 		goto out1;	
 	}
-	x = rti_dst(rti); /* x in fec by < x, nh > where ifp */
+	nh = x = rti_dst(rti); /* x in fec by < x, nh > where ifp */
 	
 	if ((error = mpls_sa_validate(rti_gateway(rti), AF_MPLS)) != 0) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
@@ -342,8 +342,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  			goto out1;
  		}
  		ifp = oifa->ifa_ifp;
-		nh = (struct sockaddr *)&smpls;
-		
+ 		
 	} else if (((fec = rtalloc1_fib(x, 0, 0UL, fibnum)) != NULL) 		
 		&& (fec->rt_gateway != NULL) && (fec->rt_ifp != NULL)
 		&& (fec->rt_ifa != NULL) && (fec->rt_flags & RTF_UP)) {

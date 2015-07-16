@@ -8,6 +8,11 @@
 !/sbin/ifconfig/af_mpls.c
 !/sbin/ifconfig/ifmpe.c
 
+!/sbin/route
+!/sbin/route/Makefile
+!/sbin/route/route.c
+!/sbin/route/keywords
+
 !/sys
 !/sys/Makefile
 !/sys/conf

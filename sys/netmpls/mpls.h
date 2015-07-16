@@ -514,7 +514,6 @@ extern int	mpls_exp_override;
 extern int 	mpls_empty_cw;
 
 extern int	mpls_pfil_hook; 
-extern int	mpls_pfil_ipfw;
 
 /*
  * Control block for raw socket for 

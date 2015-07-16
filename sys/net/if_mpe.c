@@ -252,7 +252,7 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		break;
 	case SIOCGLIFPHYADDR:
 /*
- * Get lla from proxy, if any
+ * Get lla from proxy, if any.
  */			
 		smpls = (struct sockaddr_mpls *)
 			&(((struct if_laddrreq *)data)->addr);
@@ -263,6 +263,11 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			error = EAFNOSUPPORT;
 			break;
 		}	
+		
+		if (smpls->smpls_len != sizeof(*smpls)) {
+			error = EINVAL;
+			break;
+		}
 		
 		if (sdl->sdl_family != AF_LINK) {
 			error = EAFNOSUPPORT;
@@ -348,9 +353,7 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 			error = EAFNOSUPPORT;
 			break;
 		}
-		IF_AFDATA_RLOCK(ifp);	
-		ifa = MPLS_IFINFO_IFA(ifp);
-		IF_AFDATA_RUNLOCK(ifp);	
+		
  		
  		if (ifa == NULL) {
 			error = EADDRNOTAVAIL;

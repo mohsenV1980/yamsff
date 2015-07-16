@@ -123,42 +123,10 @@ SYSCTL_INT(_net_mpls, OID_AUTO, exp_empty_cw, CTLFLAG_RW,
 	&mpls_empty_cw, 0,
 	"Prepend empty CW in case of OSI-L2/VPN for backward compatibility.");
 	
-int mpls_pfil_hook = 0; 
-int mpls_pfil_ipfw = 0;   
+int mpls_pfil_hook = 0;   
 
 SYSCTL_INT(_net_mpls, OID_AUTO, pfil_enable, CTLFLAG_RW,
     &mpls_pfil_hook, 0, "Enables access to by pfil(9) implemented IAP");
-SYSCTL_INT(_net_mpls, OID_AUTO, pfil_ipfw, CTLFLAG_RW,
-    &mpls_pfil_ipfw, 0, "Enables packed filtering by ipfw(4)");
-
-/*
- * Handler for net.mpls.pfil_ipfw.
- * Derived from bridge(4).
- */
-static int
-sysctl_mpls_pfil_ipfw(SYSCTL_HANDLER_ARGS)
-{
-	int enable = mpls_pfil_ipfw;
-	int error;
-
-	error = sysctl_handle_int(oidp, &enable, 0, req);
-	enable = (enable) ? 1 : 0;
-
-	if (enable != mpls_pfil_ipfw) {
-		mpls_pfil_ipfw = enable;
-/*
- * Disable direct access to pfil(9), 
- * so that ipfw(4) does not run twice.
- * But, it is possible enabling both. 
- */
-		if (mpls_pfil_ipfw) 
-			mpls_pfil_hook = 0;
-	}
-
-	return (error);
-}
-SYSCTL_PROC(_net_mpls, OID_AUTO, ipfw, CTLTYPE_INT|CTLFLAG_RW,
-	    &mpls_pfil_ipfw, 0, &sysctl_mpls_pfil_ipfw, "I", "Filter with IPFW");
 
 extern int	mpls_control(struct socket *, u_long, caddr_t, struct ifnet *,
     struct thread *);

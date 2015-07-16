@@ -187,14 +187,11 @@ struct if_data {
 #define	IFF_VETHER	0x800000		/* (i) instance of if_vether(4) */
 
 /*
- * Extensions targeting MPLS.
+ * Extensions for MPLS.
  */
-#include "opt_mpls.h"
 
-#ifdef MPLS
 #define IFF_MPLS 	0x1000000	/* (n) interface is being MPLS enabled */
 #define IFF_MPE 	0x2000000	/* (n) interface operates as PE (ingress) */
-#endif /* MPLS */
 
 /*
  * Old names for driver flags so that user space tools can continue to use

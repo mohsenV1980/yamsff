@@ -298,7 +298,7 @@ raw_input_mpls_rtalert_cb(struct mbuf *m, struct sockproto *proto,
 }
 
 /*
- * Remove MPLS_LABEL_RTALERT annotation and equeue PDU.
+ * Remove MPLS_LABEL_RTALERT annotation and equeue pdu.
  */
 void
 mpls_rtalert_input(struct mbuf *m, int off)
@@ -316,7 +316,7 @@ mpls_rtalert_input(struct mbuf *m, int off)
 }
 
 /*
- * Inject by application layer processed PDU.
+ * Inject by application layer processed pdu.
  */
 int
 mpls_rtalert_output(struct mbuf *m, struct socket *so)
@@ -351,11 +351,9 @@ mpls_rtalert_output(struct mbuf *m, struct socket *so)
 	error = 0;
 	shim = mtod(m, struct shim_hdr *);
 	ttl = ntohl(shim->shim_label & MPLS_TTL_MASK);
-	if (ttl <= 1) {
+	if (ttl <= 1) 
 		ttl = mpls_defttl;
-		shim->shim_label &= ~MPLS_TTL_MASK;
-		shim->shim_label |= htonl(ttl);
-	}
+
 	shim->shim_label &= ~MPLS_TTL_MASK;
 	shim->shim_label |= htonl(ttl);
 
