@@ -2980,13 +2980,13 @@ options 	RANDOM_DEBUG	# Debugging messages
 options 	RANDOM_RWFILE	# Read and write entropy cache
 
 #
-# Extensions for MPLS adnd PPPoE
+# Extensions for MPLS, PPPoE.
 #
 options 	MPLS
 options 	MPLS_DEBUG
-options 	PPPOE_PFIL
-
 device  	if_mpe
+
+options 	PPPOE_PFIL
 device  	if_vether
 
 

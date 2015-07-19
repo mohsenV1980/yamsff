@@ -3961,7 +3961,7 @@ xdr/xdr_reference.c		optional krpc | nfslockd | nfsclient | nfsserver | nfscl | 
 xdr/xdr_sizeof.c		optional krpc | nfslockd | nfsclient | nfsserver | nfscl | nfsd
 
 #
-# Extensions for MPLS and PPPoE.
+# Extensions for MPLS and if_bridge(4).
 #
 net/if_mpe.c 			optional if_mpe mpls inet 
 net/if_vether.c			optional if_vether

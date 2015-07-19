@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014, 2015 Henning Matyschok
+ * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -107,6 +108,7 @@ __FBSDID("$FreeBSD: releng/10.1/sys/net/if_bridge.c 253751 2013-07-28 19:49:39Z 
 
 #include "opt_mpls.h"
 #include "opt_mpls_debug.h"
+
 #include "opt_pppoe_pfil.h"
 
 #include <sys/param.h>
@@ -1934,12 +1936,12 @@ bridge_dummynet(struct mbuf *m, struct ifnet *ifp)
 #if defined(MPLS) || defined(PPPOE_PFIL)
 	struct ether_header eh1;
 #ifdef PPPOE_PFIL
-	struct ether_header *eh;
 	struct m_tag_pppoe *mtp;
 #endif /* PPPOE_PFIL */	
 #ifdef MPLS
 	struct m_tag_mpls *mtm;
-#endif /* MPLS */	 
+#endif /* MPLS */ 
+	int dn_passed;
 #endif
 
 	sc = ifp->if_bridge;
@@ -1964,14 +1966,18 @@ bridge_dummynet(struct mbuf *m, struct ifnet *ifp)
 		if (m == NULL)
 			return;
 	}
+#if defined(MPLS) || defined(PPPOE_PFIL)
+	dn_passed = 0;
 #ifdef PPPOE_PFIL	
-/* 
- * Restore PCI of rfc-2516 based frame, if any.
- */	
-	mtp = (struct m_tag_pppoe *)
-		m_tag_locate(m, MTAG_PPPOE, MTAG_PPPOE_PCI, NULL);
-	if (mtp != NULL) {
-		eh = mtod(m, struct ether_header *);
+	if ((mtp = (struct m_tag_pppoe *)
+		m_tag_locate(m, MTAG_PPPOE, 
+			MTAG_PPPOE_PCI, NULL)) != NULL) {
+		
+		if (dn_passed != 0) {
+			m_freem(m);
+			return;
+		}
+		dn_passed = 1;
 /*
  * Backup PCI and strip it off.
  */	
@@ -2007,12 +2013,15 @@ bridge_dummynet(struct mbuf *m, struct ifnet *ifp)
 	}
 #endif /* PPPOE_PFIL */	
 #ifdef MPLS	
-/* 
- * Restore MPLS label stack, if any.
- */	
-	mtm = (struct m_tag_mpls *)
-		m_tag_locate(m, MTAG_MPLS, MTAG_MPLS_STACK, NULL);
-	if (mtm != NULL) {
+	if ((mtm = (struct m_tag_mpls *)
+		m_tag_locate(m, MTAG_MPLS, 
+			MTAG_MPLS_STACK, NULL)) != NULL) {
+			
+		if (dn_passed != 0) {
+			m_freem(m);
+			return;
+		}
+		dn_passed = 1;
 /*
  * Store Ethernet PCI temprorary and strip it off.
  */	
@@ -2038,7 +2047,8 @@ bridge_dummynet(struct mbuf *m, struct ifnet *ifp)
 		bcopy(&eh1, mtod(m, caddr_t), ETHER_HDR_LEN);
 		m_tag_delete(m, &mtm->mtm_tag);
 	}	
-#endif /* MPLS */	
+#endif /* MPLS */
+#endif
 	bridge_enqueue(sc, ifp, m);
 }
 
@@ -3248,7 +3258,8 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 #ifdef MPLS
 	case ETHERTYPE_MPLS:
 #endif /* MPLS */	
-		break;
+	
+				/* FALLTHROUGH */
 	default:
 		/*
 		 * Check to see if the user wants to pass non-ip
@@ -3370,8 +3381,8 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 			goto out;
 		}	
 			/* FALLTROUGH */
-			
-#endif /* PPPOE_PFIL */
+		break;	
+#endif /* PPPOE_PFIL */	
 	default:
 		break;		
 	}					
@@ -3532,11 +3543,9 @@ out:
 		bcopy(&mtp->mtp_ph, mtod(*mp, caddr_t), sizeof(struct pppoe_hdr));
 		eh2.ether_type = htons(ether_type);
 		m_tag_delete(*mp, &mtp->mtp_tag);
-		
-			/* FALLTHROUGH */
-	
+		break;
 #endif /* PPPOE_PFIL */	
-	default:	/* FALLTHROUGH */
+	default:
 		break;
 	}
 #endif	

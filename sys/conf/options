@@ -932,10 +932,10 @@ RANDOM_DEBUG	opt_random.h
 RANDOM_RWFILE	opt_random.h
 
 #
-# Extensions for PPPoE and MPLS
+# Extensions for MPLS and PPPoE.
 #
 MPLS 	opt_mpls.h
 MPLS_DEBUG 	opt_mpls_debug.h
-PPPOE_PFIL 	opt_pppoe_pfil.h
 
+PPPOE_PFIL 	opt_pppoe_pfil.h
 
