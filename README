@@ -8,8 +8,7 @@ NOTE:	This software and its components are under active developement and far
 NOTE: 	from correctness and containing (some serious) flaws implecitely.
 NOTE: 	
 NOTE: 	Purpose of this operation is to teach myself about MPLS for a better 
-NOTE:   understanding underlying principles for designing and implementing of 
-NOTE:   for buildi9ng and installing Autonomous Systems and WAN in general.
+NOTE:   understanding.   
 NOTE: 	
 NOTE: 	Stern warning: Do not use this software in production environments!
 
@@ -18,11 +17,43 @@ Ongoing operational tasks:
  
  o Testing components and bugfixes (or refactoring some parts).
  o Review of ifconfig(8) and bugfixes (or refactoring some parts).
- o Adding modefied netstat(8) route(8) commands.
+ o Adding modefied netstat(8) command.
  o Writing detailed implementation notes.
  o Starting of tasks for a better understanding of 
    IPv6 implementation in sys/netinet6. 
 
+If someone wants to contact me by electronic mail, please use encryption.
 
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+Version: GnuPG v1
 
+mQGiBFWePMgRBAC6W4aGo1ppG3ZFL1lVKNHxSwsP0NEKl3nl2lPyveLkwFEFeEYu
+H7zfsqkmcHK1CpuFha3GaqS2OIciFxsVEB62ikjum4hPCWa/iw+Y0EOYmcoDDLmX
+2FRIoPrbbJ0V5jEktrRKNnS5nvywIDLh+ORGnq0aws8usSs/ySSQ6PuQJwCg2j0t
+7AlAnn3OuCYcv0GsimRdFZMD/1OPAVtY1mVB+Vrd0H1wLzLDdFS6Vx4O6rViwP0N
+5s1KRhqoMll1S3EQC/lhAu+s9b50owDSUGCiXHfpbyB7iUISFlAOV9QQ4afd6ae0
+RlpIu482PnrdfVSJEEQDBDj/BpSVAFK6H03Pl78E+b0l9cWuzeYqrEf9sfF8OH8j
+mK9LA/9RYdyHGVUaBFIOuoQkAyKT7CyJggVmuO6C5Y3tTDTAc/w+pw/2uI0kYOpQ
+CC4ndyhRG3FU4aNOTaPc1PF5uYIrEHUyEnfFkyULAMYfn9p36Blnqo5zh/YjVL69
+3CVg4ctv7ZmQePyToD+C48xY4YTGu6Gf8XjUfCATz+teMd7u2rRHSGVubmluZyBN
+YXR5c2Nob2sgKEtvbW1lbnRhci4pIDxoZW5uaW5nLm1hdHlzY2hva0BzdHVkLmZo
+LWZsZW5zYnVyZy5kZT6IYAQTEQIAIAUCVZ48yAIbAwYLCQgHAwIEFQIIAwQWAgMB
+Ah4BAheAAAoJEG5NpFEQWRHK724AniVS+UsNSrAg0/mQkf9Fll7x07zNAJ9CMB97
+aDCoGpagfg3sXvs2au/3jrkCDQRVnjzIEAgApaGHl4vvyPGy0nOI1hbQ4p3nM5+S
+sWl/uxp2alXacRlKYkHkD8RsR5lJRjG17tuLpiogHYhTt8ijRplwCp2b2FTRq8aF
+ULTewRkjOVamVjtnaa5lQ0/Z3QH+f5BK5dcboZHJlQg/+LOgFNpVF/nUaTF+jfVs
+DnZVLUhJeY+LYpcw60NEu9yiUWxMD/944xoXC+uVb1ihsDxVSFgpFFjhpkN0Bcg9
+aii6o3Eyhqr4dKZsc52p/NmZWPtMxOaPYqYPBZOgs69JedL6zAdAwel9sNJ0aaJy
+F4bRvQfy5tryhy5j83MSQ/594l1nGCvUHvYez5sddHkyDjWy4FqYm5SCwwADBgf9
+EpPcdF7F+OckvlJ1BbjtufOayORknIKSMrbfD2tj88brp9awl77Yw4iKegfSyw/p
+vCvyrjyZiy729lVlvv8jah3oISx+jcfpSgB1QnXHhWz1vDkgc66nn7trXgAlHoH0
+TdaAzOMtu59vgcQe8FbBwLOI90DjNnuwbwRw0nXvRxiJCQd5aiYb2LRjlvo+6L3T
+J8fJirqBjmFzGpcH1haZo1GYGmr5MsUJMEpwxr77YKBji32ca/V1uyBko/DbZrW7
+oUAYr+GawaCwb13Y8CsyFl3FAWRVBYJ0Y1iO/3W2QpGLcpitcnKxrnCFFYSbLsoc
++6qGvUjOSFvHUtDajNoIfYhJBBgRAgAJBQJVnjzIAhsMAAoJEG5NpFEQWRHKZrEA
+n0Bj9G0snst74mnx/jvBuoQQZKtjAKCd8pZpq2rFKgCrJp+BjXpDfetMMw==
+=SMc1
+-----END PGP PUBLIC KEY BLOCK-----
+
+Our world is not a (so called) "Ponyhof", yeah. :-).
 
