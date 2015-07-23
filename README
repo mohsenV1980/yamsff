@@ -7,23 +7,22 @@ release.
 NOTE:	This software and its components are under active developement and far
 NOTE: 	from correctness and containing (some serious) flaws implecitely.
 NOTE: 	
-NOTE: 	Purpose of this operation is to teach myself about MPLS and protocol
-NOTE: 	integration in kernel space of BSD based OS's or OS's where its
-NOTE: 	implementation of system or network protocols is based or derived 
-NOTE:	from codebase of BSD based OS's for a better understanding the 
-NOTE:   underlying principles for designing and implementing of operating 
-NOTE:   systems in general.
+NOTE: 	Purpose of this operation is to teach myself about MPLS for a better 
+NOTE:   understanding underlying principles for designing and implementing of 
+NOTE:   for buildi9ng and installing Autonomous Systems and WAN in general.
 NOTE: 	
 NOTE: 	Stern warning: Do not use this software in production environments!
 
-Next tasks:
------------
+Ongoing operational tasks:
+--------------------------
  
- o Testing components and bugfixes.
- o Adding modefied ifconfig(8) and route(8) commands.
+ o Testing components and bugfixes (or refactoring some parts).
+ o Review of ifconfig(8) and bugfixes (or refactoring some parts).
+ o Adding modefied netstat(8) route(8) commands.
  o Writing detailed implementation notes.
  o Starting of tasks for a better understanding of 
    IPv6 implementation in sys/netinet6. 
+
 
 
 
