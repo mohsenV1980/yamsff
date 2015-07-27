@@ -145,7 +145,7 @@ Directory structure
                   if_loop.c
                      
                             Loopback of MPLS Protocol Data Units (pdu)
-                            into AF_MPLS domain. 
+                            into AF_MPLS domain by if_simloop. 
                                        
                   if_mpe.c
                   
