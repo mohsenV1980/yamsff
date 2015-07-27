@@ -3,15 +3,7 @@ Yet another MPLS stack for FreeBSD (yamsff)
 
 This software is derived from present MPLS implementation in current OpenBSD
 release.
-
-NOTE:	This software and its components are under active developement and far
-NOTE: 	from correctness and containing (some serious) flaws implecitely.
-NOTE: 	
-NOTE: 	Purpose of this operation is to teach myself about MPLS for a better 
-NOTE:   understanding.   
-NOTE: 	
-NOTE: 	Stern warning: Do not use this software in production environments!
-
+     
 Ongoing operational tasks:
 --------------------------
  
@@ -19,9 +11,11 @@ Ongoing operational tasks:
  o Review of ifconfig(8) and bugfixes (or refactoring some parts).
  o Adding modefied netstat(8) command.
  o Writing detailed implementation notes.
- o Starting of tasks for a better understanding of 
-   IPv6 implementation in sys/netinet6. 
+ o Starting of tasks for IPv6 integration.
 
+Additional information about contacting
+---------------------------------------
+      
 If someone wants to contact me by electronic mail, please use encryption.
 
 -----BEGIN PGP PUBLIC KEY BLOCK-----
@@ -56,4 +50,134 @@ n0Bj9G0snst74mnx/jvBuoQQZKtjAKCd8pZpq2rFKgCrJp+BjXpDfetMMw==
 -----END PGP PUBLIC KEY BLOCK-----
 
 Our world is not a (so called) "Ponyhof", yeah. :-).
+
+Implementation notes
+====================
+
+NOTE:	This software and its components are under active developement and far
+NOTE: 	from correctness and containing (some serious) flaws implecitely.
+NOTE: 	
+NOTE: 	Purpose of this operation is to teach myself about MPLS for a better 
+NOTE:   understanding.   
+NOTE: 	
+NOTE: 	Stern warning: Do not use this software in production environments!
+
+Directory structure
+-------------------
+
+    /conf/		Extended configuration files.
+   
+	/sbin/		Extended system commands (User space).
+   
+                 (a) ifconfig(8)
+                 
+                 (b) route(8)
+
+	/sys/		Kernel sources.
+
+   				net/      Extensions for inclusion mapping in AF_MPLS
+   				          domain on interface layer.
+   
+     			  if.c      
+     			            Generic ifnet(9) implementation.
+
+                             (a) ifhwioctl, enabling / disabling IFF_MPLS
+                                 by SIOCSIFFLAGS command.
+
+                             (b) if_purgeaddrs, calls mpls_purgaddrs.
+
+                  if.h      
+                            Defined flags maps to link layer and 
+                            inclusion mapping in AF_MPLS domain.
+                 
+                             (a) IFF_VETHER, denotes if_vether(4).
+ 
+                             (b) IFF_MPLS, enables inclusion mapping 
+                                 from interface in AF_MPLS domain.        
+                            
+                             (c) IFF_MPE, MPLS label binding maps to
+                                 interface, aggregate set of routes.
+                             
+                  if_bridge.c
+                  
+                            Inspection Access Point (iap) was extended.
+                             
+                             (a) Inspecting frames carrying rfc-2516
+                                 Service Data Units (sdu).
+                                 
+                             (b) Inspecting frames originating AF_MPLS. 
+                              
+                            Only by frames containing IPv[4|6] datagrams  
+                            are processed by pfil(9).  
+                              
+                  if_bridgevar.h
+                  
+                            Definition of mbuf_tags(9) for caching 
+                            Protocol Control Information (pci) on 
+                            both cases as described above. 
+                  
+                  if_ethersubr.c
+                  
+                             (a) Sdu handoff by netisr(9) during
+                                 ether_demux.
+                             
+                             (b) Resoluton by mpls_arpresolve 
+                                 during ether_output.
+                             
+                             (c) SIOCSIFADDR invokes mpls_arp_ifinit 
+                                 during ether_ioctl.
+                  
+                  if_fddisubr.c
+                  
+                             (a) Sdu handoff by netisr(9) during
+                                 fddi_input.
+                             
+                             (b) Resoluton by mpls_arpresolve 
+                                 during fddi_output.
+                             
+                             (c) SIOCSIFADDR invokes mpls_arp_ifinit 
+                                 during fddi_ioctl.
+                  
+                  if_llatbl.c          
+                             
+                             (a) llatbl_lle_show dumps MPLS_ARP cache.
+                                       
+                  if_mpe.c
+                  
+                            Implementation of generic interface still capable
+                            operating as MPLS Provider Edge for OSI-L2/VPN in
+                            conjunction with instance of if_bridge(4) as its
+                            member.
+                            
+                            Implementaion is derived from implementation by
+                            the OpenBSD project. 
+                            
+                  if_vether.c
+                  
+                            Port from implementation of if_vether(4), where 
+                            it is implementetd by the OpenBSD project.           
+                            
+                  route.c
+                  
+                            (a) Lookup of Incoming Label Map (ilm) on RADIX 
+                                Trie in AF_MPLS domain by rtalloc_fib1(9). 
+                  
+                            (b) Lookup for x-connect by ifa_ifwithroute_fib
+                                as precondition for generating by Next Hop
+                                Label Forwarding Entry (nhlfe) covered ilm.
+                                
+                            (c) Creation or deletion of ilm by 
+                                rtrequest1_fib(9). 
+                  
+                  rtsock.c
+
+                            (a) Accessing AF_MPLS domain by mpls_rt_output
+                                during rt_output in AF_ROUTE domain.
+
+                            (b) Proxyfied creation or deletion of nhlfe by 
+                                mpls_newaddrmsg during control oprations
+                                in AF_MPLS domain
+           
+           ... to be continued.                 
+                             
 
