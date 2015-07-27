@@ -38,6 +38,7 @@
 !/sys/net/if_ethersubr.c
 !/sys/net/if_fddisubr.c
 !/sys/net/if_llatbl.c
+!/sys/net/if_loop.c
 !/sys/net/if_mpe.c
 !/sys/net/if_vether.c
 !/sys/net/route.c

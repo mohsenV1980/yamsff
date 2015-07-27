@@ -118,7 +118,7 @@ Directory structure
                   
                   if_ethersubr.c
                   
-                             (a) Sdu handoff by netisr(9) during
+                             (a) Handoff decapsulated sdu by netisr(9) during
                                  ether_demux.
                              
                              (b) Resoluton by mpls_arpresolve 
@@ -129,8 +129,8 @@ Directory structure
                   
                   if_fddisubr.c
                   
-                             (a) Sdu handoff by netisr(9) during
-                                 fddi_input.
+                             (a) Handoff decapsulated sdu by netisr(9) 
+                                 during fddi_input.
                              
                              (b) Resoluton by mpls_arpresolve 
                                  during fddi_output.
@@ -140,7 +140,12 @@ Directory structure
                   
                   if_llatbl.c          
                              
-                             (a) llatbl_lle_show dumps MPLS_ARP cache.
+                             Llatbl_lle_show dumps MPLS_ARP cache.
+                      
+                  if_loop.c
+                     
+                            Loopback of MPLS Protocol Data Units (pdu)
+                            into AF_MPLS domain. 
                                        
                   if_mpe.c
                   
