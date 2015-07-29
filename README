@@ -11,6 +11,7 @@ Ongoing operational tasks:
  o Adding modefied netstat(8) command.
  o Writing detailed implementation notes.
  o Starting of tasks for IPv6 integration.
+ o Manual pages and misc. documentation.
 
 Additional information about contacting
 ---------------------------------------
@@ -74,10 +75,13 @@ Directory structure
 
     /sys/        Kernel sources.
 
-                 net/      Extensions for inclusion mapping in 
-                           AF_MPLS domain on interface layer.
+                 net/        
+                 
+                  Extensions for inclusion mapping in AF_MPLS domain on         
+                  interface layer.
    
                   if.c      
+                            
                             Generic ifnet(9) implementation.
 
                              (a) ifhwioctl, enabling / disabling IFF_MPLS
@@ -139,8 +143,8 @@ Directory structure
                   
                   if_llatbl.c          
                              
-                             Llatbl_lle_show dumps intire ARP cache
-                             residing in AF_MPLS domain.
+                            Llatbl_lle_show dumps intire ARP cache
+                            residing in AF_MPLS domain.
                       
                   if_loop.c
                      
@@ -160,29 +164,109 @@ Directory structure
                   if_vether.c
                   
                             Port from implementation of if_vether(4), where 
-                            it is implementetd in OpenBSD 4.7 release.           
+                            it is implementetd in OpenBSD 4.7 release.
                             
                   route.c
                   
-                            (a) Lookup of Incoming Label Map (ilm) on RADIX 
-                                Trie in AF_MPLS domain by rtalloc_fib1(9). 
+                             (a) Lookup of Incoming Label Map (ilm) on RADIX 
+                                 Trie in AF_MPLS domain by rtalloc_fib1(9). 
                   
-                            (b) Lookup for x-connect by ifa_ifwithroute_fib
-                                as precondition for generating by Next Hop
-                                Label Forwarding Entry (nhlfe) covered ilm.
+                             (b) Lookup for x-connect by ifa_ifwithroute_fib
+                                 as precondition for generating by Next Hop
+                                 Label Forwarding Entry (nhlfe) covered ilm.
                                 
-                            (c) Creation or deletion of ilm by 
-                                rtrequest1_fib(9). 
+                             (c) Creation or deletion of ilm by 
+                                 rtrequest1_fib(9). 
                   
                   rtsock.c
 
-                            (a) Accessing AF_MPLS domain by mpls_rt_output
-                                during rt_output in AF_ROUTE domain.
+                             (a) Accessing AF_MPLS domain by mpls_rt_output
+                                 during rt_output in AF_ROUTE domain.
 
-                            (b) Proxyfied creation or deletion of nhlfe by 
-                                mpls_newaddrmsg during control oprations
-                                in AF_MPLS domain
+                             (b) Proxyfied creation or deletion of nhlfe by 
+                                 mpls_newaddrmsg during control oprations
+                                 in AF_MPLS domain
+       
+                 netgraph/   
+                 
+                  Integration of if_vether(4) in AF_NETGRAPH domain.
+                  
+                  ng_ether.c
+                  
+                             Any mbuf(9) passing ng_ether_rcv_lower 
+                             will be annotated by M_PROTO2 flag, if
+                             IFF_VETHER exists on interface.            
            
+                 netmpls/
+                  
+                  Implementation of AF_MPLS domain.   
+                  
+                  mpls.c
+
+                            By ioctl(2) accessible generic control operations.
+                            
+                             (a) MPLS label assignement / removal scoped
+                                 on interface layer (aggregate set of 
+                                 routes).
+                                 
+                             (b) Attachment / detachement of link layer
+                                 interfaces on instances of if_mpe(4).
+                                 
+                            ARP cache implemenataion in AF_MPLS domain.  
+
+                  mpls.h
+                  
+                            Interface specification for accessing AF_MPLS
+                            domain. 
+                            
+                            XXX: Internal order and structure of this .h 
+                            XXX: is wrong.
+                            XXX:
+                            XXX: I'll externalize components in mpls_var.h.
+                  
+                  mpls_arp.c
+                  
+                            Implementation of MPLS_ARP.  
+                               
+                  mpls_input.c
+                  
+                            Implementation of input processing, handoff
+                            into service requesting operating system 
+                            layer, forwarding and exception handling.
+                             
+                  mpls_output.c
+                  
+                            Implementation of output processing.
+                  
+                  mpls_proto.c
+                  
+                            Implementation of AF_MPLS domain.
+                            
+                  mpls_raw.c
+
+                            Implementation of raw socket for accessing 
+                            control operations in AF_MPLS domain.
+                  
+                  mpls_rmx.c
+                  
+                            Implementation of RADIX trie containing by nhlfe
+                            covered ilm in AF_MPLS domain.
+                            
+                            Further, ctor and dtor for nhlfe are implented
+                            here.
+                  
+                  mpls_rtalert.c
+                  
+                            Implementation of raw socket processing pdu 
+                            with MPLS_RTALERT pci.
+                  
+                  mpls_shim.c
+                  
+                            Kernel Programming Interface (kpi) for 
+                            generating or manipulating MPLS labeled
+                            pdu.
+                  
            ... to be continued.                 
                              
+
 
