@@ -60,13 +60,11 @@ NOTE: from correctness and containing (some serious) flaws implecitely.
 NOTE:        
 NOTE: Purpose of this operation is to teach myself about MPLS for a better 
 NOTE: understanding.   
-NOTE:
-NOTE: All copyright notices that are linked with my name holds ONLY for
-
-NOTE: integrating AF_MPLS domain neccessary EXTENSIONS and MODIFICATIONS.
-NOTE: because most of here used components (especially in link layer)
 NOTE: 
-NOTE: Please contact me, if I  
+NOTE: Please contact me (see above) and help me, if I've applied copyright 
+NOTE: notices linked with my name on files in this repository in a wrong way. 
+NOTE:
+NOTE: I am inexperienced and I will avoid any trouble about licensing issues.   
 NOTE:        
 NOTE: Stern warning: Do not use this software in production environments!
 
