@@ -12,6 +12,7 @@ Ongoing operational tasks:
  o Writing detailed implementation notes.
  o Starting of tasks for IPv6 integration.
  o Manual pages and misc. documentation.
+ o Fixes targeting my bad ortography.
 
 Additional information about contacting
 ---------------------------------------
@@ -212,7 +213,7 @@ Directory structure
                              (b) Attachment / detachement of link layer
                                  interfaces on instances of if_mpe(4).
                                  
-                            ARP cache implemenataion in AF_MPLS domain.  
+                            ARP cache implementation in AF_MPLS domain.  
 
                   mpls.h
                   
@@ -222,11 +223,13 @@ Directory structure
                             XXX: Internal order and structure of this .h 
                             XXX: is wrong.
                             XXX:
-                            XXX: I'll externalize components in mpls_var.h.
+                            XXX: I'll externalize components into mpls_var.h.
                   
                   mpls_arp.c
                   
-                            Implementation of MPLS_ARP.  
+                            Implementation of MPLS_ARP protocol and access 
+                            to protocol layer specific link layer address 
+                            resolution code, if MPLS_ARP is disabled.  
                                
                   mpls_input.c
                   
@@ -252,8 +255,8 @@ Directory structure
                             Implementation of RADIX trie containing by nhlfe
                             covered ilm in AF_MPLS domain.
                             
-                            Further, ctor and dtor for nhlfe are implented
-                            here.
+                            Further, ctor and dtor for by Forward Equivalence
+                            Class (fec) covered nhlfe are implented here.
                   
                   mpls_rtalert.c
                   
