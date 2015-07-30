@@ -305,15 +305,15 @@ Necessary precondition is a workstation running at least FreeBSD 10.1-RELEASE.
  3. Install source code distribution shipped with installation media, i. e. 
     stored as image file in /tmp. 
     
-    (a) mdconfig -t vnode -f /tmp/FreeBSD-10.1-RELEASE-<arch>-disc1.iso
+     (a) mdconfig -t vnode -f /tmp/FreeBSD-10.1-RELEASE-<arch>-disc1.iso
     
-    (b) mount_cd9660 /dev/md0 /mnt     
+     (b) mount_cd9660 /dev/md0 /mnt     
                      
-    (c) tar xfk /mnt/usr/freebsd-dist/src.txz     
+     (c) tar xfk /mnt/usr/freebsd-dist/src.txz     
                  
-    (d) umount /mnt
+     (d) umount /mnt
     
-    (e) mdconfig -d -u 0
+     (e) mdconfig -d -u 0
                   
            ... to be continued.                 
                              
