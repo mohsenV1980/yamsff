@@ -201,10 +201,20 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                   
                   ng_ether.c
                   
-                             Any mbuf(9) passing ng_ether_rcv_lower 
-                             will be annotated by M_PROTO2 flag, if
-                             IFF_VETHER exists on interface.            
+                            Any mbuf(9) passing ng_ether_rcv_lower 
+                            will be annotated by M_PROTO2 flag, if
+                            IFF_VETHER exists on interface.            
            
+                 netinet/   
+                 
+                  Integration of AF_MPLS domain into address resolution code.
+                  
+                  if_ether.c
+                  
+                            Implements Service Access Point (sap) for 
+                            handoff mbuf(9) containing MPLS_ARP sdu 
+                            into AF_MPLS domain.                 
+                 
                  netmpls/
                   
                   Implementation of AF_MPLS domain.   
@@ -275,6 +285,35 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                             Kernel Programming Interface (kpi) for 
                             generating or manipulating MPLS labeled
                             pdu.
+                 
+How to install?
+---------------                
+
+Necessary precondition is a workstation running at least FreeBSD 10.1-RELEASE.
+                 
+ 1. Create directory for containment of entire source tree.
+ 
+     (a) mkdir -p /usr/src                          
+                 
+ 2. Fetch this repository into former created directory. 
+ 
+     (a) cd /usr/src
+ 
+     (b) git clone https://github.com/hmatyschok/yamms .
+    
+ 
+ 3. Install source code distribution shipped with installation media, i. e. 
+    stored as image file in /tmp. 
+    
+    (a) mdconfig -t vnode -f /tmp/FreeBSD-10.1-RELEASE-<arch>-disc1.iso
+    
+    (b) mount_cd9660 /dev/md0 /mnt     
+                     
+    (c) tar xfk /mnt/usr/freebsd-dist/src.txz     
+                 
+    (d) umount /mnt
+    
+    (e) mdconfig -d -u 0
                   
            ... to be continued.                 
                              
