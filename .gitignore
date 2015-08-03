@@ -56,5 +56,6 @@
 !/sys/netmpls
 !/sys/netmpls/*
 
+!/sys/netpfil/ipfw/ip_dn_io.c
 !/sys/netpfil/ipfw/ip_fw_pfil.c
 !/sys/netpfil/ipfw/ip_fw_private.h
