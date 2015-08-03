@@ -30,6 +30,9 @@
 !/sys/modules/if_vether
 !/sys/modules/if_vether/Makefile
 
+!/sys/modules/ipfw
+!/sys/modules/ipfw/Makefile
+
 !/sys/net
 !/sys/net/if.c
 !/sys/net/if.h
@@ -53,4 +56,5 @@
 !/sys/netmpls
 !/sys/netmpls/*
 
-
+!/sys/netpfil/ipfw/ip_fw_pfil.c
+!/sys/netpfil/ipfw/ip_fw_private.h
