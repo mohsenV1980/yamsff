@@ -331,13 +331,10 @@ again:
  * ether_output_frame.
  */
 static int
-ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
+ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir0,
     struct inpcb *inp)
 {
 #if defined(MPLS) || defined(PPPOE_PFIL)
-/*
- * XXX: ugly... but I'll refactor entire func.
- */
 #ifdef MPLS
 	struct m_tag_mpls *mtm;
 	size_t nstk;
@@ -350,9 +347,14 @@ ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
 	struct ether_header *eh;
 	struct ether_header save_eh;
 	struct mbuf *m;
-	int i, ret;
+	
 	struct ip_fw_args args;
 	struct m_tag *mtag;
+	
+	int i, error, dir;
+
+    dir = dir0;
+    error = 0;
 
 	/* fetch start point from rule, if any */
 	mtag = m_tag_locate(*m0, MTAG_IPFW_RULE, 0, NULL);
@@ -366,7 +368,7 @@ ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
 		mtag->m_tag_id = PACKET_TAG_NONE;
 		r = (struct ipfw_rule_ref *)(mtag + 1);
 		if (r->info & IPFW_ONEPASS)
-			return (0);
+			return (error);
 		args.rule = *r;
 	}
 
@@ -376,8 +378,8 @@ ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
 	if (m->m_len < i) {
 		m = m_pullup(m, i);
 		if (m == NULL) {
-			*m0 = m;
-			return (0);
+			error = ENOBUFS;
+			goto bad;
 		}
 	}
 	eh = mtod(m, struct ether_header *);
@@ -386,31 +388,31 @@ ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
 
 #if defined(MPLS) || defined(PPPOE_PFIL)
 	ether_type = ntohs(save_eh.ether_type);
+	i = IP_FW_PASS;
 /*
- * XXX: ugly... but I'll refactor entire func.
- */	
+ * Cache pci of sdu.
+ */
 	switch (ether_type) {
 #ifdef MPLS
 	case ETHERTYPE_MPLS:
 /*
- * Allocate MTAG_MPLS containing cached MPLS label stack.
+ * Strip off MPLS label stack and keep a copy.
  */
 		mtm = (struct m_tag_mpls *)
 			m_tag_alloc(MTAG_MPLS, MTAG_MPLS_STACK, 
 				sizeof(struct m_tag_mpls), M_NOWAIT);
  		if (mtm == NULL) {
- 			FREE_PKT(*m0);
- 			*m0 = NULL;
- 			return (0);
+ 			error = ENOBUFS;
+ 			goto bad;
  		}
-/*
- * Strip off MPLS label stack and keep a copy.
- */
+ 		
 		for (nstk = 0; nstk < MPLS_INKERNEL_LOOP_MAX; nstk++) {
-			if ((m)->m_len < MPLS_HDRLEN) {
-			    if ((m = m_pullup(m, MPLS_HDRLEN)) == NULL)
-					*m0 = m;
-					return (0);
+			if (m->m_len < MPLS_HDRLEN) {
+				m = m_pullup(m, MPLS_HDRLEN);
+				if (m == NULL) {
+ 					error = ENOBUFS;
+ 					goto bad;
+ 				}
 			}
 			mtm->mtm_stk[nstk] = *mtod(m, struct shim_hdr *);
 			m_adj(m, MPLS_HDRLEN);
@@ -419,14 +421,12 @@ ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
 		}
 		mtm->mtm_size = (nstk + 1) * MPLS_HDRLEN;
 /*
- * Annotate MPI
+ * Annotate mbuf(9).
  */
 	 	m_tag_prepend(m, &mtm->mtm_tag);		
 /*
- * Relabel Ethernet protocol id in Protocol Control 
- * Information (PCI) such that Message Primitive (MPI) 
- * could processed by dummynet(4) or divert(4).
- */
+ * Relabel protocol id, as precondition for parsing by ipfw_chk.
+ */	
 		switch (*mtod(m, u_char *) >> 4) {
 		case IPVERSION:
 			save_eh.ether_type = htons(ETHERTYPE_IP);
@@ -438,43 +438,35 @@ ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
 #endif /* INET6 */
 		default:
 /*
- * XXX: ugly... but I'll refactor entire func.
- */	
-			i = IP_FW_PASS;
-			goto out;
+ * Bypass filtering, if sdu is not in AF_INET[6].
+ */			
+			goto done;
 		}			
 		break;	
 #endif /* MPLS */
 #ifdef PPPOE_PFIL
 	case ETHERTYPE_PPPOE:
 /*
- * Allocate MTAG_PPPOE containing rfc-2516 PCI. 
- */
+ * Backup and strip off rfc-2516 and rfc-1661 pci.
+ */	
 		mtp = (struct m_tag_pppoe *)
 			m_tag_alloc(MTAG_PPPOE, MTAG_PPPOE_PCI, 
 						sizeof(struct m_tag_pppoe), M_NOWAIT);
  		if (mtp == NULL) {
- 			FREE_PKT(*m0);
- 			*m0 = NULL;
- 			return (0);
+ 			error = ENOBUFS;
+ 			goto bad;
  		}
-/*
- * Backup and strip off rfc-2516 and rfc-1661 PCI, 
- * if possible. but jump out if SDU is not in 
- * PPP_IP[V6].
- */	
 		m_copydata(m, 0, sizeof(struct pppoe_hdr), (caddr_t) &mtp->mtp_ph);
 		m_adj(m, sizeof(struct pppoe_hdr));
 		
 		m_copydata(m, 0, sizeof(uint16_t), (caddr_t) &mtp->mtp_pr);
 		m_adj(m, sizeof(uint16_t));
 /*
- * Annotate MPI.
+ * Annotate mbuf(9).
  */			
  		m_tag_prepend(m, &mtp->mtp_tag);		
 /*
- * Relabel Ethernet protocol id, such that MPI 
- * could processed by dummynet(4) or divert(4).
+ * Relabel protocol id, as precondition for parsing by ipfw_chk.
  */	
 		switch (ntohs(mtp->mtp_pr)) {
 		case PPP_IP:
@@ -487,12 +479,10 @@ ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
 			break;		
 		default:
 /*
- * XXX: ugly... but I'll refactor entire func.
+ * Bypass filtering, if sdu is not in AF_INET[6].
  */		
-			i = IP_FW_PASS;
-			goto out;
+			goto done;
 		}	
-			/* FALLTROUGH */
 		break;	
 #endif /* PPPOE_PFIL */	
 	default:
@@ -506,87 +496,93 @@ ipfw_check_frame(void *arg, struct mbuf **m0, struct ifnet *dst, int dir,
 	args.next_hop6 = NULL;	/* we do not support forward yet	*/
 	args.eh = &save_eh;	/* MAC header for bridged/MAC packets	*/
 	args.inp = NULL;	/* used by ipfw uid/gid/jail rules	*/
+/*
+ * Parse frame by ipfw(4).
+ */	
 	i = ipfw_chk(&args);
 	m = args.m;
-	if (m != NULL) {
+	
+	if (m == NULL) 
+		goto out;
 
 #if defined(MPLS) || defined(PPPOE_PFIL)
+done:
 /*
- * XXX: ugly... but I'll refactor entire func.
- */
-out:		
-		switch (ether_type) {
-#ifdef MPLS
-		case ETHERTYPE_MPLS:
-/*
- * Restore cached MPLS label stack and original Ethernet protocol id.
+ * Restore frame.
  */	
-	 		M_PREPEND(m, mtm->mtm_size, M_NOWAIT);
-			if (m == NULL) {
-				*m0 = m;
-				return (0);
-			}	
-			bcopy(mtm->mtm_stk, mtod(m, caddr_t), mtm->mtm_size);
-			save_eh.ether_type = htons(ether_type);	
-			m_tag_delete(m, &mtm->mtm_tag);
-			break;
+	switch (ether_type) {
+#ifdef MPLS
+	case ETHERTYPE_MPLS:
+/*
+ * Prepend MPLS label stack.
+ */	
+	 	M_PREPEND(m, mtm->mtm_size, M_NOWAIT);
+		if (m == NULL) {
+ 			error = ENOBUFS;
+ 			goto bad;
+ 		}
+		bcopy(mtm->mtm_stk, mtod(m, caddr_t), mtm->mtm_size);
+		m_tag_delete(m, &mtm->mtm_tag);
+		break;
 #endif /* MPLS */
 #ifdef PPPOE_PFIL
 	case ETHERTYPE_PPPOE:
 /*
- * Restore rfc-1661 based PCI and original Ethernet protocol id. 
+ * Prepend rfc-1661 protocol id. 
  */	
-			M_PREPEND(m, sizeof(uint16_t), M_NOWAIT);
-			if (m == NULL) {
-				*m0 = m;
-				return (0);
-			}	
-			bcopy(&mtp->mtp_pr, mtod(m, caddr_t), sizeof(uint16_t));
-		
-			M_PREPEND(m, sizeof(struct pppoe_hdr), M_NOWAIT);
-			if (m == NULL) {
-				*m0 = m;
-				return (0);
-			}	
-			bcopy(&mtp->mtp_ph, mtod(m, caddr_t), 
+		M_PREPEND(m, sizeof(uint16_t), M_NOWAIT);
+		if (m == NULL) {
+ 			error = ENOBUFS;
+ 			goto bad;
+ 		}
+		bcopy(&mtp->mtp_pr, mtod(m, caddr_t), sizeof(uint16_t));
+/*
+ * Prepend rfc-2516 pci. 
+ */			
+		M_PREPEND(m, sizeof(struct pppoe_hdr), M_NOWAIT);
+		if (m == NULL) {
+ 			error = ENOBUFS;
+ 			goto bad;
+ 		}
+		bcopy(&mtp->mtp_ph, mtod(m, caddr_t), 
 				sizeof(struct pppoe_hdr));
-			save_eh.ether_type = htons(ether_type);
-			m_tag_delete(m, &mtp->mtp_tag);
-			break;
+		m_tag_delete(m, &mtp->mtp_tag);
+		break;
 #endif /* PPPOE_PFIL */	
-		default:
-			break;
-		}
+	default:
+		break;
+	}
 #endif	
 
-		/*
-		 * Restore Ethernet header, as needed, in case the
-		 * mbuf chain was replaced by ipfw.
-		 */
-		M_PREPEND(m, ETHER_HDR_LEN, M_NOWAIT);
-		if (m == NULL) {
-			*m0 = NULL;
-			return (0);
-		}
-		if (eh != mtod(m, struct ether_header *))
-			bcopy(&save_eh, mtod(m, struct ether_header *),
-				ETHER_HDR_LEN);
-	}
+/*
+ * Restore Ethernet pci.
+ */
+	M_PREPEND(m, ETHER_HDR_LEN, M_NOWAIT);
+	if (m == NULL) {
+ 		error = ENOBUFS;
+ 		goto bad;
+ 	}
+ 	eh = mtod(m, struct ether_header *);
+ 	
+#if defined(MPLS) || defined(PPPOE_PFIL)	
+	save_eh.ether_type = htons(ether_type);
+#endif
+	
+	bcopy(&save_eh, mtod(m, struct ether_header *), ETHER_HDR_LEN);
+out:	
 	*m0 = m;
-
-	ret = 0;
+	
 	/* Check result of ipfw_chk() */
 	switch (i) {
 	case IP_FW_PASS:
 		break;
 
 	case IP_FW_DENY:
-		ret = EACCES;
+		error = EACCES;
 		break; /* i.e. drop */
 
 	case IP_FW_DUMMYNET:
-		ret = EACCES;
-		int dir;
+		error = EACCES;
 
 		if (ip_dn_io_ptr == NULL)
 			break; /* i.e. drop */
@@ -594,19 +590,20 @@ out:
 		*m0 = NULL;
 		dir = PROTO_LAYER2 | (dst ? DIR_OUT : DIR_IN);
 		ip_dn_io_ptr(&m, dir, &args);
-		return 0;
+		return (error);
 
 	default:
 		KASSERT(0, ("%s: unknown retval", __func__));
 	}
 
-	if (ret != 0) {
-		if (*m0)
+bad:
+	if (error != 0) {
+		if (*m0 != NULL)
 			FREE_PKT(*m0);
 		*m0 = NULL;
 	}
 
-	return ret;
+	return (error);
 }
 
 /* do the divert, return 1 on error 0 on success */

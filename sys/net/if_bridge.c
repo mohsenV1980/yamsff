@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Henning Matyschok
+ * Copyright (c) 2015 Henning Matyschok
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -3180,8 +3180,6 @@ bridge_state_change(struct ifnet *ifp, int state)
 static int
 bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 {
-	int snap, error, i, hlen;
-	struct ether_header *eh1, eh2;
 #ifdef MPLS
 	struct m_tag_mpls *mtm;
 	size_t nstk;
@@ -3189,6 +3187,10 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 #ifdef PPPOE_PFIL
  	struct m_tag_pppoe *mtp;
 #endif /* PPPOE_PFIL */
+	
+	int snap, error, i, hlen;
+	struct ether_header *eh1, eh2;
+	
 	struct ip *ip;
 	struct llc llc1;
 	u_int16_t ether_type;
@@ -3292,19 +3294,20 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 
 #if defined(MPLS) || defined(PPPOE_PFIL)
 	switch (ether_type) {
+/*
+ * Cache pci of sdu.
+ */
 #ifdef MPLS
 	case ETHERTYPE_MPLS:
 /*
- * Allocate MTAG_MPLS containing cached MPLS label stack.
+ * Strip off MPLS label stack and keep a copy.
  */
 		mtm = (struct m_tag_mpls *)
 			m_tag_alloc(MTAG_MPLS, MTAG_MPLS_STACK, 
 				sizeof(struct m_tag_mpls), M_NOWAIT);
  		if (mtm == NULL)
  			goto bad;
-/*
- * Strip off MPLS label stack and keep a copy.
- */
+
 		for (nstk = 0; nstk < MPLS_INKERNEL_LOOP_MAX; nstk++) {
 			if ((*mp)->m_len < MPLS_HDRLEN) {
 			    if (((*mp) = m_pullup(*mp, MPLS_HDRLEN)) == NULL)
@@ -3317,14 +3320,12 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 		}
 		mtm->mtm_size = (nstk + 1) * MPLS_HDRLEN;
 /*
- * Annotate MPI
+ * Annotate mbuf(9).
  */
 	 	m_tag_prepend(*mp, &mtm->mtm_tag);		
 /*
- * Relabel Ethernet protocol id in Protocol Control 
- * Information (PCI) such that Message Primitive (MPI) 
- * could processed by dummynet(4) or divert(4).
- */
+ * Relabel protocol id, as precondition for inspection.
+ */	
 		switch (*mtod(*mp, u_char *) >> 4) {
 		case IPVERSION:
 			eh2.ether_type = htons(ETHERTYPE_IP);
@@ -3335,6 +3336,9 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 			break;
 #endif /* INET6 */
 		default:
+/*
+ * Bypass filtering, if sdu is not in AF_INET[6].
+ */	
 			goto out;
 		}			
 		break;	
@@ -3350,9 +3354,7 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
  		if (mtp == NULL)
  			goto bad;	
 /*
- * Backup and strip off rfc-2516 and rfc-1661 PCI, 
- * if possible. but jump out if SDU is not in 
- * PPP_IP[V6].
+ * Backup and strip off rfc-2516 and rfc-1661 pci.
  */	
 		m_copydata(*mp, 0, sizeof(struct pppoe_hdr), (caddr_t) &mtp->mtp_ph);
 		m_adj(*mp, sizeof(struct pppoe_hdr));
@@ -3360,13 +3362,12 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 		m_copydata(*mp, 0, sizeof(uint16_t), (caddr_t) &mtp->mtp_pr);
 		m_adj(*mp, sizeof(uint16_t));
 /*
- * Annotate MPI.
- */			
+ * Annotate mbuf(9).
+ */				
  		m_tag_prepend(*mp, &mtp->mtp_tag);		
 /*
- * Relabel Ethernet protocol id, such that MPI 
- * could processed by dummynet(4) or divert(4).
- */	
+ * Relabel protocol id, as precondition for inspection.
+ */
 		switch (ntohs(mtp->mtp_pr)) {
 		case PPP_IP:
 			eh2.ether_type = htons(ETHERTYPE_IP);
@@ -3377,6 +3378,9 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 #endif /* INET6 */
 			break;		
 		default:
+/*
+ * Bypass filtering, if sdu is not in AF_INET[6].
+ */		
 			error = 0;
 			goto out;
 		}	
@@ -3510,11 +3514,14 @@ bridge_pfil(struct mbuf **mp, struct ifnet *bifp, struct ifnet *ifp, int dir)
 	
 #if defined(MPLS) || defined(PPPOE_PFIL)
 out: 
+/*
+ * Restore frame.
+ */	
 	switch (ether_type) {
 #ifdef MPLS
 	case ETHERTYPE_MPLS:
 /*
- * Restore cached MPLS label stack and original Ethernet protocol id.
+ * Prepend MPLS label stack.
  */	
 	 	M_PREPEND(*mp, mtm->mtm_size, M_NOWAIT);
 		if (*mp == NULL)
@@ -3528,14 +3535,16 @@ out:
 #ifdef PPPOE_PFIL
 	case ETHERTYPE_PPPOE:
 /*
- * Restore rfc-1661 based PCI and original Ethernet protocol id. 
+ * Prepend rfc-1661 protocol id. 
  */	
 		M_PREPEND(*mp, sizeof(uint16_t), M_NOWAIT);
 		if (*mp == NULL)
 			goto bad;
 
 		bcopy(&mtp->mtp_pr, mtod(*mp, caddr_t), sizeof(uint16_t));
-		
+/*
+ * Prepend rfc-2516 pci. 
+ */			
 		M_PREPEND(*mp, sizeof(struct pppoe_hdr), M_NOWAIT);
 		if (*mp == NULL)
 			goto bad;
@@ -3551,12 +3560,17 @@ out:
 #endif	
 		
 	if (snap) {
+/*
+ * Restore IEEE802.2 pci.
+ */
 		M_PREPEND(*mp, sizeof(struct llc), M_NOWAIT);
 		if (*mp == NULL)
 			return (error);
 		bcopy(&llc1, mtod(*mp, caddr_t), sizeof(struct llc));
 	}
-
+/*
+ * Restore Ethernet pci.
+ */	
 	M_PREPEND(*mp, ETHER_HDR_LEN, M_NOWAIT);
 	if (*mp == NULL)
 		return (error);
