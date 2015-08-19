@@ -247,23 +247,26 @@ int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
 		struct rtentry **ilm, u_int fibnum)
 { 	
-	struct sockaddr_mpls smpls;
-	struct sockaddr_ftn sftn;
+	struct sockaddr *x = NULL;	
+	struct sockaddr *seg = NULL;
+	struct sockaddr *nh = NULL;
 	
-	int omsk, fmsk, flags;
+	struct mpls_ifaddr *nhlfe = NULL;
 	
-	struct sockaddr *x;	
-	struct sockaddr *nh;
-	struct sockaddr *seg;
-	struct rtentry *fec;
-	struct ifnet *ifp;
+	struct ifaddr *oifa = NULL; 
+	struct ifaddr *ifa = NULL;
+	struct rtentry *fec = NULL;
+	struct ifnet *ifp = NULL;
+	
+	int omsk = RTF_MPLS_OMASK;
+	int fmsk = RTF_MPLS;
+	
+	int error, flags;
 	
 	uint32_t seg_in, seg_out;
-
-	struct ifaddr *oifa, *ifa;
-	struct mpls_ifaddr *nhlfe;
 	
-	int error;
+	struct sockaddr_ftn sftn;
+	struct sockaddr_mpls smpls;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
@@ -273,26 +276,12 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	case RTM_ADD:			
 	case RTM_DELETE:	/* FALLTRHOUGH */
 	case RTM_GET:  	
-
-		bzero(&sftn, sizeof(sftn));
-		bzero(&smpls, sizeof(smpls));
-
-		omsk = RTF_MPLS_OMASK;
-		fmsk = RTF_MPLS;
-		flags = 0;
-		
-		fec = NULL;	
-		ifp = NULL;
-		
-		oifa = ifa = NULL;	
-		nhlfe = NULL;
-		error = 0;	
 		break;
 	default:
 		log(LOG_INFO, "%s: command invalid\n", __func__);		
 		error = EOPNOTSUPP;
 		goto out;
-	}
+	} 
 /*
  * Determine, if MPLS label binding is possible.
  */	
@@ -300,14 +289,14 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		log(LOG_INFO, "%s: requested route not "
 			"in AF_MPLS domain", __func__);
 		error = EINVAL;
-		goto out1;
+		goto out;
 	}
 	fmsk |= (rti_flags(rti) & RTF_GATEWAY) ? RTF_GATEWAY : RTF_LLDATA;
 	
 	if ((fmsk = (rti_flags(rti) & fmsk)) == 0)  {
 		log(LOG_INFO, "%s: flags invalid\n", __func__);
 		error = EINVAL;
-		goto out1;
+		goto out;
 	}
 	fmsk |= (rti_flags(rti) & omsk);
 
@@ -315,28 +304,27 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	case RTF_POP:
 	case RTF_PUSH: 	/* FALLTRHOUGH */
 	case RTF_SWAP:
-		fmsk |= (rti_flags(rti) & RTF_STK) ? RTF_STK : RTF_MPE;	
 		break;
 	default:	
 		log(LOG_INFO, "%s: opcode invalid\n", __func__);		
 		error = EINVAL;
-		goto out1;
+		goto out;
 	}
+	fmsk |= (rti_flags(rti) & RTF_STK) ? RTF_STK : RTF_MPE;	
 	flags = (rti_flags(rti) & fmsk);
+
+	if ((error = mpls_sa_validate(rti_gateway(rti), AF_MPLS)) != 0) {
+		log(LOG_INFO, "%s: segment invalid\n", __func__);
+		goto out;	
+	} 
+	seg = rti_gateway(rti);		
+	seg_out = seg_in = satosmpls_label(seg) & MPLS_LABEL_MASK;
 	
 	if ((error = mpls_sa_validate(rti_dst(rti), AF_UNSPEC)) != 0) {
 		log(LOG_INFO, "%s: dst in fec invalid\n", __func__);
-		goto out1;	
+		goto out;	
 	}
-	nh = x = rti_dst(rti); /* x in fec by < x, nh > where ifp */
-	
-	if ((error = mpls_sa_validate(rti_gateway(rti), AF_MPLS)) != 0) {
-		log(LOG_INFO, "%s: segment invalid\n", __func__);
-		goto out1;	
-	}                    /* seg = < seg_in, seg_out > */
-	seg = rti_gateway(rti);
-	seg_in = satosmpls_label(seg) & MPLS_LABEL_MASK;
-	seg_out = satosmpls_label(seg) & MPLS_LABEL_MASK;
+	x = rti_dst(rti);	  	
 /*
  * Determine, if Forward Equivalence Class (fec) still 
  * exists as precondition for MPLS label binding.
@@ -350,7 +338,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  */
  		if ((oifa = ifa_ifwithaddr(x)) == NULL) {	
  			error = EADDRNOTAVAIL;
- 			goto out1;
+ 			goto out;
  		}
  		ifp = oifa->ifa_ifp;
  		
@@ -365,7 +353,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	} else {
 		log(LOG_INFO, "%s: fec invalid\n", __func__);
 		error = ESRCH;	
-		goto out1;
+		goto out;
 	}
 /*
  * Discard, if invalid MPLS label binding.
@@ -373,30 +361,33 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	if (((flags & omsk) == RTF_SWAP) && (seg_in != seg_out)) {
 		log(LOG_INFO, "%s: ftn invalid\n", __func__);		
 		error = ESRCH;
-		goto out1;
+		goto out;
 	}
 	
 	if ((ifp->if_flags & IFF_MPLS) == 0) {
 		error = ENXIO;
-		goto out1;	
+		goto out;	
 	}
-	nh = (struct sockaddr *)&sftn;
-	seg = (struct sockaddr *)&smpls;
+	bzero(&sftn, sizeof(sftn));
+	bcopy(x, &sftn, x->sa_len);
 /*
  * Generate gateway address where x in fec maps to < op, seg_out, rd >.
  */
-	bcopy(x, &sftn, x->sa_len);
-
 	sftn.sftn_len = SFTN_LEN;
 	sftn.sftn_op = flags & omsk;
 	sftn.sftn_label = seg_out;
 	sftn.sftn_vprd = seg_out;	
+	
+	nh = (struct sockaddr *)&sftn;
 /*
  * Map key (seg_in) for nhlfe and ilm.
  */	
+	bzero(&smpls, sizeof(smpls));
 	smpls.smpls_len = SMPLS_LEN;
 	smpls.smpls_family = AF_MPLS;
 	smpls.smpls_label = seg_in;	
+	
+	seg = (struct sockaddr *)&smpls;
 /*
  * Locate X-connect, if any.
  */		
@@ -615,7 +606,8 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EOPNOTSUPP;	
 		break;
 	}
-out1:	
+
+out:	
 	if (fec != NULL) 
 		RTFREE_LOCKED(fec);
 
@@ -623,8 +615,8 @@ out1:
 		ifa_free(oifa);
 
 	if (ifa != NULL)
-		ifa_free(ifa);	
-out:		
+		ifa_free(ifa);			
+	
 	return (error);
 }
 
