@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2014, 2015 Henning Matyschok
+ * Copyright (c) 2015 Henning Matyschok
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -122,8 +122,6 @@ mpls_ifaof_ifpforlspdst(struct sockaddr *seg, struct sockaddr *x,
 	uint32_t af = AF_MPLS;
 	uint32_t i; 
 	
-	struct sockaddr *sa;
-	
 	if (seg->sa_family != af)
 		return (NULL);
 	
@@ -138,16 +136,14 @@ mpls_ifaof_ifpforlspdst(struct sockaddr *seg, struct sockaddr *x,
 		if (ifa->ifa_addr->sa_family != af)
 			continue;
 	
-		if (satosftn_label(ifa->ifa_dstaddr) != i) 
+		
+		if (mpls_sa_equal(x, ifa->ifa_dstaddr) == 0)
 			continue;
 		
-		sa = (struct sockaddr *)&mpls_x(ifa);
-
-		if (mpls_sa_equal(sa, x)) {
+		if (satosftn_label(ifa->ifa_dstaddr) == i)  {
 			ifa_ref(ifa);
 			break;
 		}
-		sa = NULL;
 	}
 	IF_ADDR_RUNLOCK(ifp);
 	
@@ -348,8 +344,6 @@ mpls_ifawithsegdst_fib(struct sockaddr *seg, struct sockaddr *x,
 	uint32_t af = AF_MPLS;
 	uint32_t i; 
 	
-	struct sockaddr *sa;
-	
 	if (seg->sa_family != af)
 		return (NULL);
 	
@@ -376,14 +370,11 @@ mpls_ifawithsegdst_fib(struct sockaddr *seg, struct sockaddr *x,
 			if (satosmpls_label(ifa->ifa_addr) != i) 
 				continue;
 			
-			sa = (struct sockaddr *)&mpls_x(ifa);
-			
-			if (mpls_sa_equal(sa, x)) {
+			if (mpls_sa_equal(x, ifa->ifa_dstaddr)) {
 				ifa_ref(ifa);
 				IF_ADDR_RUNLOCK(ifp);
 				goto done;
 			}
-			sa = NULL;
 		}
 		IF_ADDR_RUNLOCK(ifp);
 	}
@@ -403,9 +394,7 @@ mpls_ifaof_ifpforsegdst(struct sockaddr *seg, struct sockaddr *x,
 	struct ifaddr *ifa;
 	
 	uint32_t af = AF_MPLS;
-	uint32_t i; 
-	
-	struct sockaddr *sa;
+	uint32_t i;
 	
 	if (seg->sa_family != af)
 		return (NULL);
@@ -424,13 +413,10 @@ mpls_ifaof_ifpforsegdst(struct sockaddr *seg, struct sockaddr *x,
 		if (satosmpls_label(ifa->ifa_addr) != i) 
 			continue;
 		
-		sa = (struct sockaddr *)&mpls_x(ifa);
-
-		if (mpls_sa_equal(sa, x)) {
+		if (mpls_sa_equal(x, ifa->ifa_dstaddr)) {
 			ifa_ref(ifa);
 			break;
 		}
-		sa = NULL;
 	}
 	IF_ADDR_RUNLOCK(ifp);
 	
@@ -451,9 +437,7 @@ mpls_ifawithdst_fib(struct sockaddr *x, int flags, u_int fibnum, int getref)
 	struct ifaddr *ifa;
 	
 	uint32_t af = AF_MPLS;
-	
-	struct sockaddr *sa;
-	
+		
 	IFNET_RLOCK_NOSLEEP();
 	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
 		
@@ -472,7 +456,7 @@ mpls_ifawithdst_fib(struct sockaddr *x, int flags, u_int fibnum, int getref)
 			if (ifa->ifa_addr->sa_family != af)
 				continue;
 			
-			if (mpls_sa_equal(sa, x) == 0) 
+			if (mpls_sa_equal(x, ifa->ifa_dstaddr) == 0) 
 				continue;
 		
 			if (mpls_flags(ifa) & flags) {
@@ -480,7 +464,6 @@ mpls_ifawithdst_fib(struct sockaddr *x, int flags, u_int fibnum, int getref)
 				IF_ADDR_RUNLOCK(ifp);
 				goto done;
 			}
-			sa = NULL;
 		}
 		IF_ADDR_RUNLOCK(ifp);
 	}
@@ -500,8 +483,6 @@ mpls_ifaof_ifpfordst(struct sockaddr *x, int flags,
 	struct ifaddr *ifa;
 	
 	uint32_t af = AF_MPLS;
-	
-	struct sockaddr *sa;
 
 	IF_ADDR_RLOCK(ifp);
 	TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
@@ -511,17 +492,14 @@ mpls_ifaof_ifpfordst(struct sockaddr *x, int flags,
 	
 		if (ifa->ifa_addr->sa_family != af)
 			continue;
-		
-		sa = (struct sockaddr *)&mpls_x(ifa);
 
-		if (mpls_sa_equal(sa, x) == 0) 
+		if (mpls_sa_equal(ifa->ifa_dstaddr, x) == 0) 
 			continue;
 		
 		if (mpls_flags(ifa) & flags) {
 			ifa_ref(ifa);
 			break;
 		}
-		sa = NULL;
 	}
 	IF_ADDR_RUNLOCK(ifp);
 	
@@ -565,10 +543,8 @@ mpls_ifaof_ifpforxconnect(struct sockaddr *seg, struct sockaddr *nh,
 		if (satosmpls_label(ifa->ifa_addr) != i) 
 			continue;
 			
-#ifdef MPLS_DEBUG
 		if (ifa->ifa_dstaddr->sa_len != len)
-			continue;	
-#endif /* MPLS_DEBUG */		
+			continue;		
 		
 		if (mpls_sa_equal(ifa->ifa_dstaddr, nh)) {
 			ifa_ref(ifa);
@@ -624,10 +600,8 @@ mpls_ifawithxconnect_fib(struct sockaddr *seg, struct sockaddr *nh,
 			if (satosmpls_label(ifa->ifa_addr) != i) 
 				continue;
 		
-#ifdef MPLS_DEBUG
 			if (ifa->ifa_dstaddr->sa_len != len)
 				continue;	
-#endif /* MPLS_DEBUG */	
 		
 			if (mpls_sa_equal(ifa->ifa_dstaddr, nh)) {
 				ifa_ref(ifa);

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2014, 2015 Henning Matyschok
+ * Copyright (c) 2015 Henning Matyschok
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -148,9 +148,9 @@ int	mpls_rn_inithead(void **, int);
 int
 mpls_rn_inithead(void **rnh0, int off)
 {
-	struct radix_node_head *rnh;
 	int error;
-
+	struct radix_node_head *rnh;
+	
 	if ((error = rn_inithead(rnh0, off)) != 0) {
 		rnh = *rnh0;
 		
@@ -176,40 +176,47 @@ int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *,
 	struct rtentry **, u_int);
 
 /*
- * Wrapper for rtrequest_fib(9), generates 
- * incoming label mapping based on enclosing 
- * nhlfe whose itself depends on existing
- * fec. 
+ * Wrapper for rtrequest_fib(9), generates incoming label mapping 
+ * based on enclosing nhlfe still itself depends on existing fec. 
  */
 int 	
 mpls_rtrequest_fib(int cmd, struct ifaddr *ifa, 
 		struct rtentry **ilm, u_int fibnum)
 {
+	int error;
+
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */	
 	
-	if (ifa == NULL) 
-		return (ESRCH);
+	if (ifa == NULL) {
+		error = ESRCH;
+		goto out;	
+	}
 
-	if ((ifa->ifa_flags & IFA_NHLFE) == 0) 
-		return (EADDRNOTAVAIL);
+	if ((ifa->ifa_flags & IFA_NHLFE) == 0) { 
+		error = EADDRNOTAVAIL;
+		goto out;	
+	}
 /*
  * An ingress MPLS label binding is not covered by an ilm. 
  */	
-	if (mpls_flags(ifa) & (RTF_MPE|RTF_LLINFO))
-		return (0);	
-
-	return (rtrequest_fib(cmd, 
+	if (mpls_flags(ifa) & (RTF_MPE|RTF_LLINFO)) {
+		error = 0;	
+		goto out;
+	}
+	error = rtrequest_fib(cmd, 
 		ifa->ifa_addr, 
 		ifa->ifa_dstaddr, 
 		ifa->ifa_netmask, 
 		mpls_flags(ifa), 
-		ilm, fibnum));
+		ilm, fibnum);
+out:
+	return (error);		
 }
 
 /*
- * Accepts by socket(4) in AF_ROUTE or by mpls_control received
+ * Accept by socket(4) in AF_ROUTE or by mpls_control received 
  * service requests.
  *
  *  o RTAX_DST holds key x for fec = < x, nh > where nh -> ifp
@@ -240,19 +247,18 @@ int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
 		struct rtentry **ilm, u_int fibnum)
 { 	
+	struct sockaddr_mpls smpls;
+	struct sockaddr_ftn sftn;
 	
 	int omsk, fmsk, flags;
 	
 	struct sockaddr *x;	
+	struct sockaddr *nh;
 	struct sockaddr *seg;
 	struct rtentry *fec;
 	struct ifnet *ifp;
-	struct sockaddr *nh;
 	
 	uint32_t seg_in, seg_out;
-
-	struct sockaddr_mpls smpls;
-	struct sockaddr_ftn sftn;
 
 	struct ifaddr *oifa, *ifa;
 	struct mpls_ifaddr *nhlfe;
@@ -267,6 +273,12 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	case RTM_ADD:			
 	case RTM_DELETE:	/* FALLTRHOUGH */
 	case RTM_GET:  	
+
+		bzero(&sftn, sizeof(sftn));
+		bzero(&smpls, sizeof(smpls));
+
+		nh = (struct sockaddr *)&sftn;
+		seg = (struct sockaddr *)&smpls;
 
 		omsk = RTF_MPLS_OMASK;
 		fmsk = RTF_MPLS;
@@ -328,7 +340,10 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	seg = rti_gateway(rti);
 	seg_in = satosmpls_label(seg) & MPLS_LABEL_MASK;
 	seg_out = satosmpls_label(seg) & MPLS_LABEL_MASK;
-
+/*
+ * Determine, if Forward Equivalence Class (fec) still 
+ * exists as precondition for MPLS label binding.
+ */
 	if ((x->sa_family == AF_LINK)
 		&& (flags & RTF_LLDATA)
 		&& (flags & RTF_PUSH) 
@@ -336,21 +351,19 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 /*
  * Per-interface MPLS label space.
  */
- 		oifa = ifa_ifwithaddr(x);
- 		if (oifa == NULL) {	
+ 		if ((oifa = ifa_ifwithaddr(x)) == NULL) {	
  			error = EADDRNOTAVAIL;
  			goto out1;
  		}
  		ifp = oifa->ifa_ifp;
  		
 	} else if (((fec = rtalloc1_fib(x, 0, 0UL, fibnum)) != NULL) 		
-		&& (fec->rt_gateway != NULL) && (fec->rt_ifp != NULL)
-		&& (fec->rt_ifa != NULL) && (fec->rt_flags & RTF_UP)) {
+		&& (fec->rt_gateway != NULL) && ((ifp = fec->rt_ifp) != NULL)
+		&& ((oifa = fec->rt_ifa) != NULL) && (fec->rt_flags & RTF_UP)) {
 /*
  * MPLS label space scoped by set containing fec.
  */
-		ifp = fec->rt_ifp;
-		nh = fec->rt_gateway;
+		ifa_ref(oifa);
 		seg_out = satosftn_label(seg) & MPLS_LABEL_MASK;
 	} else {
 		log(LOG_INFO, "%s: fec invalid\n", __func__);
@@ -371,34 +384,22 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		goto out1;	
 	}
 /*
- * Generate an extended gateway 
- * address for nhlfe where
- *
- *	  < op, seg_out, rd >
- *
- * from fec inherited adress 
- * extends.
- */			
-	bzero(&sftn, sizeof(sftn));
-	bcopy(nh, &sftn, nh->sa_len);
-	
+ * Generate gateway address where x in fec maps to < op, seg_out, rd >.
+ */
+	bcopy(x, &sftn, x->sa_len);
+
 	sftn.sftn_len = SFTN_LEN;
 	sftn.sftn_op = flags & omsk;
 	sftn.sftn_label = seg_out;
-	sftn.sftn_vprd = seg_out;
-	
-	nh = (struct sockaddr *)&sftn;
+	sftn.sftn_vprd = seg_out;	
 /*
  * Map key (seg_in) for nhlfe and ilm.
  */	
-	bzero(&smpls, sizeof(smpls));
 	smpls.smpls_len = SMPLS_LEN;
 	smpls.smpls_family = AF_MPLS;
-	smpls.smpls_label = seg_in;
-	
-	seg = (struct sockaddr *)&smpls;
+	smpls.smpls_label = seg_in;	
 /*
- * X-connect.
+ * Locate X-connect, if any.
  */		
 	ifa = mpls_ifaof_ifpforxconnect(seg, nh, ifp, 1);
 	if (ifa == NULL) 
@@ -410,14 +411,15 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		if (ifa == NULL) {
 			if (flags & RTF_PUSH) {
 /*
- * Locate nhlfe on fastpath.
+ * Locate nhlfe by fec (x) on fastpath.
  */				
 				ifa = mpls_ifaof_ifpfordst(x, flags & omsk, ifp, 1);
 				if (ifa == NULL) 
-					ifa = mpls_ifawithdst_fib(x, flags & omsk, fibnum, 1);	
+					ifa = mpls_ifawithdst_fib(x, 
+						flags & omsk, fibnum, 1);	
 			} else {
 /*
- * Locate nhlfe on seg.
+ * Locate nhlfe by segment.
  */			
 				ifa = mpls_ifaof_ifpforseg(seg, ifp, 1);
 				if (ifa == NULL) 
@@ -426,6 +428,9 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		}
 			
 		if (ifa == NULL) { 
+/*
+ * Allocate, if possible.
+ */	
 			nhlfe = (struct mpls_ifaddr *)
 				malloc(sizeof(*nhlfe), M_IFADDR, 
 					M_ZERO|M_NOWAIT);
@@ -456,23 +461,20 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		ifa->ifa_addr = (struct sockaddr *)&nhlfe->mia_seg;
 		ifa->ifa_dstaddr = (struct sockaddr *)&nhlfe->mia_nh;	
 		ifa->ifa_netmask = (struct sockaddr *)&nhlfe->mia_seg;
-		ifa->ifa_ifp = ifp;	
-		ifa->ifa_flags |= IFA_NHLFE;
-		ifa->ifa_metric = ifp->if_metric;
-		
-		nhlfe->mia_flags = flags;	
 /*
  * Copy key (seg_in).
  */ 		
- 		bcopy(seg, ifa->ifa_addr, smpls.smpls_len);			
+ 		bcopy(seg, ifa->ifa_addr, smpls.smpls_len);	
 /*
- * Copy modefied (seg_out) gateway address,
+ * Copy key for destination (x) in fec as modefied (seg_out) gateway address.
  */		
 		bcopy(nh, ifa->ifa_dstaddr, sftn.sftn_len);	
 /*
- * Copy key for destination (x) in fec.
- */
-		bcopy(x, (struct sockaddr *)&nhlfe->mia_x, x->sa_len);		
+ * Apply flags and inclusion mapping on fec.
+ */		
+		nhlfe->mia_flags = flags;	
+		nhlfe->mia_x = oifa;
+		ifa_ref(nhlfe->mia_x);	
 /*
  * Enqueue and append nhlfe at link-level address on interface.
  */	
@@ -486,7 +488,12 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 
 		IF_ADDR_WLOCK(ifp);
 		TAILQ_INSERT_AFTER(&ifp->if_addrhead, ifp->if_addr, ifa, ifa_link);
-		IF_ADDR_WUNLOCK(ifp);			
+		IF_ADDR_WUNLOCK(ifp);
+		
+		ifa->ifa_ifp = ifp;	
+		ifa->ifa_metric = ifp->if_metric;
+		
+		ifa->ifa_flags |= IFA_NHLFE;
 /*
  * Create llentry{} by SIOCSIFADDR triggered inclusion mapping.
  */		
@@ -518,46 +525,23 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 
 		if (fec != NULL) {
 			fec->rt_ifa->ifa_rtrequest = mpls_link_rtrequest;
-/*
- * Fastpath into MPLS transit will be applied on fec, when 
- * MPLS label binding states initial label (lsp_in) on Label 
- * Switch Path (lsp). 
- *
- * The gateway address on by fec implementing rtentry(9) 
- * is replaced with those where is stored by fec (free) 
- * generated nhlfe.
- *  
- * On creation, the nhlfe inherites a modefied version from 
- * original gateway address where maps to enclosing fec. 
- *
- *      + rt_key              .       + MPLS label (BoS)
- *     |                      .       |
- *     v                      .       v
- *   +-------------+----------+-----+------+------+
- *   | 192.168.3.6 | 10.6.1.6 | Op  | 666  | VPRD |
- *   +-------------+----------+-----+------+------+
- *                   A
- *                   |
- *                   + rt_gateway
- *
- * Thus, when fastpath enters the game, by nhlfe extended 
- * gateway address is re-mapped to gateway address on by
- * nhlfe enclosing fec itself.
- *
- * This avoids a second routing table lookup by service 
- * providing MPLS layer, when handoff by protocol-layer
- * processed message primitives (mpi) into MPLS data 
- * plane was performed. 
- *
- * Because by service requesting protocol-layer performed
- * routing decision led to a rtentry(9) with an extended 
- * gateway address (see above), where is therefore accepted 
- * as argument by mpls_output.
- */			
+			
 			if ((flags & RTF_MPE) && (flags & RTF_STK)) 
 				fec->rt_flags |= RTF_STK;
 			else if (flags & RTF_MPE) {			
-				error = rt_setgate(fec, rt_key(fec), ifa->ifa_dstaddr);
+				bzero(&sftn, sizeof(sftn));
+				bcopy(fec->rt_gateway, &sftn, fec->rt_gateway->sa_len);
+/*
+ * Annotate gateway address on fec, if fec denotes fastpath (lsp_in).
+ */		
+				sftn.sftn_len = SFTN_LEN;
+				sftn.sftn_op = flags & omsk;
+				sftn.sftn_label = seg_out;
+				sftn.sftn_vprd = seg_out;
+	
+				nh = (struct sockaddr *)&sftn;
+
+				error = rt_setgate(fec, rt_key(fec), nh);
 				if (error != 0) {
 					(void)mpls_purgeaddr(ifa);	
 					break;
@@ -590,7 +574,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 					fec->rt_flags &= ~RTF_STK;
 				else if (fec->rt_flags & RTF_MPE) {
 /*
- * Restore gateway address, if fec by lsp_in.
+ * Restore gateway address, if fec denotes fastpath (lsp_in).
  */		
  					bzero(&sftn, sizeof(sftn));
  					nh = (struct sockaddr *)&sftn;	
@@ -600,7 +584,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 					else	
 						len = sizeof(struct sockaddr_dl);
 				
-					bcopy(ifa->ifa_dstaddr, nh, len);  
+					bcopy(fec->rt_gateway, nh, len);  
 					nh->sa_len = len;	
 			
 					error = rt_setgate(fec, rt_key(fec), nh);
@@ -732,15 +716,16 @@ mpls_purgeaddr(struct ifaddr *ifa)
 /*
  * Finalize.
  */	
-	bzero(seg, seg->sa_len);
-	seg = (struct sockaddr *)&mpls_x(ifa);			
-	bzero(seg, sizeof(mpls_x(ifa)));
 	seg = (struct sockaddr  *)&mpls_seg(ifa);			
 	bzero(seg, sizeof(mpls_seg(ifa)));
 	seg = (struct sockaddr  *)&mpls_nh(ifa);			
 	bzero(seg, sizeof(mpls_nh(ifa)));
 	
-	mpls_flags(ifa) = 0;	
+	mpls_flags(ifa) = 0;
+	if (mpls_x(ifa) != NULL) {
+		ifa_free(mpls_x(ifa));
+		mpls_x(ifa) = NULL;
+	}
 	mpls_lle(ifa) = NULL;	
 	
 	ifa_free(ifa);

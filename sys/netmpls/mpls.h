@@ -304,14 +304,15 @@ struct mpls_ifaddr {
 #define mia_addr      mia_ifa.ifa_addr
 #define mia_mask      mia_ifa.ifa_mask
 #define mia_dstaddr   mia_ifa.ifa_dstaddr
-	struct sockaddr_ftn 	mia_seg; /* seg_i */
-	struct sockaddr_ftn 	mia_nh; 	/* nh x < op, seg_j, rd > */
-	struct sockaddr_ftn 	mia_x;
-	
-	int 	mia_flags;
 	
 	TAILQ_ENTRY(mpls_ifaddr)	mia_link;
 	
+	struct sockaddr_ftn 	mia_seg; /* seg_i */
+	struct sockaddr_ftn 	mia_nh; 	/* < x, op, seg_j, rd > */
+	
+	int 	mia_flags;
+	
+	struct ifaddr 	*mia_x; 	/* backpointer for ifaddr(9) on fec */
 	struct llentry 	*mia_lle; 	/* shortcut */	
 };
 #define IFA_NHLFE	RTF_MPLS	/* indicates nhlfe */
@@ -322,9 +323,9 @@ struct mpls_ifaddr {
 #define miatoifa(_mia)	((struct ifaddr *)(_mia))
 
 #define mpls_lle(_ifa) \
-	(ifatomia(_ifa)->mia_lle)	
+	(ifatomia(_ifa)->mia_lle)
 #define mpls_x(_ifa) \
-	(ifatomia(_ifa)->mia_x)
+	(ifatomia(_ifa)->mia_x)	
 #define mpls_flags(_ifa) \
 	(ifatomia(_ifa)->mia_flags)	
 #define mpls_seg(_ifa) \
