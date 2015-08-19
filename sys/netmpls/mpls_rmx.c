@@ -277,9 +277,6 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		bzero(&sftn, sizeof(sftn));
 		bzero(&smpls, sizeof(smpls));
 
-		nh = (struct sockaddr *)&sftn;
-		seg = (struct sockaddr *)&smpls;
-
 		omsk = RTF_MPLS_OMASK;
 		fmsk = RTF_MPLS;
 		flags = 0;
@@ -383,6 +380,8 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = ENXIO;
 		goto out1;	
 	}
+	nh = (struct sockaddr *)&sftn;
+	seg = (struct sockaddr *)&smpls;
 /*
  * Generate gateway address where x in fec maps to < op, seg_out, rd >.
  */
