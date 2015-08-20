@@ -161,8 +161,7 @@ void	mpls_init(void);
 /*
  * Eventhandler for if_bridge(4).
  */
-static void 	mpls_bridge_if(void *arg __unused, 
-	struct ifnet *, int);
+static void 	mpls_bridge_if(void *arg __unused, struct ifnet *, int);
 
 /*
  * Service access point for dummynet(4).
@@ -201,15 +200,9 @@ mpls_init(void)
 }
 
 /*
- * Restore cached MPLS label stack, when PDU
- * leaves dummynet(4) subsystem.
+ * Restore cached MPLS label stack, when pdu leaves dummynet(4) subsystem.
  * 
- * For annotation bound ressources are released
- * implecitely, when MPI will be discarded
- * by m_freem(9).
- * 
- * See by mbuf_tags(9) denoted manual page for
- * further details.
+ * See by mbuf_tags(9) denoted manual page for further details.
  */	
 static void
 mpls_dummynet(struct mbuf *m, struct ifnet *ifp)
@@ -235,23 +228,19 @@ mpls_dummynet(struct mbuf *m, struct ifnet *ifp)
 /*
  * Receive mbuf(9) originating
  *
- *  (a) if_simloop, 
- *  (b) ether_demux 
+ *  (a) if_simloop or
  *
- * or 
- *  
- *  (c) mpe_input.
+ *  (b) ether_demux or
+ *
+ *  (c) mpe_input,
  * 
- * If Label remains Bottom of Stack (BoS) and denotes 
- * reserved MPLS label value (but its value denotes not 
- * MPLS_LABEL_IMPLNULL), mbuf(9)_ will be passed to higher 
- * its layer by label value mapped input procedure call. 
+ * if MPLS label remains Bottom of Stack (BoS) and denotes reserved MPLS label
+ * value (but its value denotes not MPLS_LABEL_IMPLNULL), mbuf(9) will be   
+ * passed to higher layer by its label value mapped input procedure call. 
  * 
- * Further, if MPLS label value denotes MPLS_RTALERT and its 
- * position is not BoS, then pdu containing mbuf(9) is passed 
- * into socket layer (directly) by mpls_rtalert_input.
- * 
- * Any other cases are handled by mpls_forward.
+ * Further, if MPLS label value denotes MPLS_RTALERT and its position is not 
+ * BoS, then pdu containing mbuf(9) is passed into socket layer (directly) by
+ * mpls_rtalert_input. Any other cases are handled by mpls_forward.
  */
 static void
 mpls_input(struct mbuf *m)
@@ -304,9 +293,8 @@ mpls_input(struct mbuf *m)
 	case MPLS_LABEL_IPV6NULL:
 #endif /* INET6 */
 /*
- * Rfc-4182 relaxes the position of the
- * explicit NULL labels. The no longer need
- * to be at the beginning of the stack.
+ * Rfc-4182 relaxes the position of the explicit NULL labels. There is no
+ * longer need to be at the beginning of the stack.
  */
 		if (hasbos == 0) 
 			goto bad;
@@ -353,14 +341,13 @@ bad:
  *
  *  3. Perform by rt_gateway encoded operation.
  *
- *  4. Forward pdu or demultiplex and pass sdu
- *     either into 
+ *  4. Forward pdu or demultiplex and pass sdu into 
  *
- *       (a) link-layer
+ *       (a) link-layer or 
  * 
- *     or 
- * 
- *       (b) protocol-layer, 
+ *       (b) protocol-layer or 
+ *
+ *       (c) socket-layer,
  *
  *     if possible. 
  */
@@ -522,6 +509,9 @@ do_link:
 
 		switch (satosftn_op(gw)) {
 		case RTF_POP:				
+/*
+ * If BoS, MPLS label pop and re-iterate.
+ */
 			if (hasbos == 0) {
 
 				if ((m = mpls_shim_pop(m)) == NULL) 
@@ -535,13 +525,15 @@ do_link:
 				break;		
 			}
 /*
- * Divert, if ilm maps to if_mpe(4). 
+ * Divert, if inclusion mapping on if_mpe(4). 
  */
 			if (ifp->if_type == IFT_MPLS) {
 				(ifp->if_input)(ifp, m);
 				goto done;
 			}
-				
+/*
+ * Handoff into protocol- or link-layer.
+ */				
 			switch (gw->sa_family) {
 			case AF_INET:				
 				goto do_v4;
@@ -552,7 +544,7 @@ do_link:
 			case AF_LINK:
 				goto do_link;
 			
-			default: /* unsupported protocol */
+			default: /* unsupported domain */
 				break;
 			}
 			goto out;
@@ -769,13 +761,11 @@ bad:
 }
 
 /*
- * Perform basic checks on header size since
- * pfil(9) assumes ip_input has already processed
- * it for it. 
+ * Perform basic checks on header size since pfil(9) assumes ip_input has
+ * already processed it for it. The Implementation of bridge_ip_checkbasic 
+ * where remains in if_bridge(4) is reused entirely. 
  *
- * Implementation of bridge_ip_checkbasic 
- * in if_bridge(4) is reused entirely. See 
- * net/if_bridge.c for_further details.
+ * See net/if_bridge.c for_further details.
  *
  * XXX: stats are not yet implemented.
  */
@@ -859,12 +849,11 @@ bad:
 }
 
 /*
- * Provides similar functionality as in case 
- * of mpls_ip_checkbasic, but only for IPv6.
+ * Provides similar functionality as in case of mpls_ip_checkbasic, but only
+ * for IPv6. The implementation of bridge_ip6_checkbasic in if_bridge(4) is 
+ * reused. 
  *
- * Implementation of bridge_ip6_checkbasic 
- * in if_bridge(4) is reused entirely. See 
- * net/if_bridge.c for_further details.
+ * See net/if_bridge.c for_further details.
  *
  * XXX: stats are not yet implemented.
  */
@@ -988,9 +977,9 @@ bad:
 }
 
 /*
- * Implementation of icmp_reflect is reused 
- * completely. See netinet/ip_icmp.c for further 
- * details.   
+ * Implementation of icmp_reflect is reused completely. 
+ *
+ * See netinet/ip_icmp.c for further details.   
  */
 static struct mbuf *
 mpls_icmp_reflect(struct mbuf *m)
@@ -1087,11 +1076,10 @@ bad:
 }
 
 /*
- * Generates an error packet of type error. 
+ * Generate an error packet of type error. The implementation icmp_error is 
+ * reused completely. 
  *
- * Implementation icmp_error is reused 
- * completely. See netinet/ip_icmp.c for 
- * further details.
+ * See netinet/ip_icmp.c for further details.
  */
 static struct mbuf *
 mpls_icmp_error(struct mbuf *n, int type, int code, uint32_t dest, int mtu)
@@ -1214,11 +1202,10 @@ freeit:
 }
 
 /*
- * Performs fragmentation, if any. 
+ * Perform fragmentation, if any. The implementation of bridge_ip_fragment 
+ * is reused entirely. 
  *
- * Implementation of bridge_ip_fragment is 
- * reused entirely. See net/if_bridge.c for
- * further details.
+ * See net/if_bridge.c for further details.
  */
 static int
 mpls_ip_fragment(struct ifnet *ifp, struct mbuf *m, 
@@ -1256,7 +1243,7 @@ out:
 }
 
 /*
- * Pass MPI into protocol layer.
+ * Stripp of MPLS label and pass mbuf(9) into protocol layer.
  */
 void
 mpls_in_handoff(struct mbuf *m, int off)
@@ -1361,15 +1348,12 @@ out:
 
 
 /*
- * Event handler, maps MPLS_RD_ETHDEMUX 
- * MPLS route distinguisher to nhlfe.
+ * Event handler, associate MPLS_RD_ETHDEMUX MPLS route distinguisher with
+ * nhlfe.
  *
- * Method is called by bridge(4), if 
- * instance of if_mpe(4) is either
- * assumed to be member by operation 
- * maps to BRDGADD (RTM_ADD) or will 
- * be removed by BRDGDEL (RTM_DELETE) 
- * bound operation.
+ * This procedure is called by bridge(4), if instance of if_mpe(4) is either
+ * assumed to be member by operation maps to BRDGADD (RTM_ADD) or will be
+ * removed by BRDGDEL (RTM_DELETE) bound operation.
  */
 static void 
 mpls_bridge_if(void *arg __unused, struct ifnet *ifp, int cmd)
