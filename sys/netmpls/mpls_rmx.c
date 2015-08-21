@@ -177,12 +177,19 @@ int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *,
 
 /*
  * Wrapper for rtrequest_fib(9), generates incoming label mapping 
- * based on enclosing nhlfe still itself depends on existing fec. 
+ * based on enclosing nhlfe still itself depends on existing fec.
+ *
+ * Due to the case of an ingress route, gateway address of nhlfe 
+ * covering fec will be annotated. 
+ *
+  * XXX; yeah... looks ugly... I'll refactor this stuff.
  */
 int 	
 mpls_rtrequest_fib(int cmd, struct ifaddr *ifa, 
-		struct rtentry **ilm, u_int fibnum)
+		struct rtentry **rt, u_int fibnum)
 {
+	struct sockaddr_ftn sftn;
+	struct sockaddr *nh;
 	int error;
 
 #ifdef MPLS_DEBUG
@@ -198,19 +205,84 @@ mpls_rtrequest_fib(int cmd, struct ifaddr *ifa,
 		error = EADDRNOTAVAIL;
 		goto out;	
 	}
+	
+	if (mpls_flags(ifa) & (RTF_MPE|RTF_LLINFO)) {
 /*
  * An ingress MPLS label binding is not covered by an ilm. 
- */	
-	if (mpls_flags(ifa) & (RTF_MPE|RTF_LLINFO)) {
-		error = 0;	
-		goto out;
-	}
-	error = rtrequest_fib(cmd, 
-		ifa->ifa_addr, 
-		ifa->ifa_dstaddr, 
-		ifa->ifa_netmask, 
-		mpls_flags(ifa), 
-		ilm, fibnum);
+ */		
+		bzero(&sftn, sizeof(sftn));
+		nh = (struct sockaddr *)&sftn;
+		
+		error = 0;
+		
+		switch (cmd) {	
+		case RTM_ADD:
+			
+			if (*rt == NULL) 
+				break;
+
+			if (mpls_flags(ifa) & RTF_STK) { 
+				(*rt)->rt_flags |= RTF_STK;
+				break;
+			}
+/*
+ * XXX; ugly... but I'll reimplement this code-section...
+ */
+			bcopy(ifa->ifa_dstaddr, nh, ifa->ifa_dstaddr->sa_len);
+			bcopy((*rt)->rt_gateway, nh, (*rt)->rt_gateway->sa_len);
+			
+			nh->sa_len = SFTN_LEN;
+/*
+ * Annotate gateway address on fec, if fec denotes fastpath (lsp_in).
+ */				
+			error = rt_setgate((*rt), rt_key((*rt)), nh);
+			if (error != 0) 
+				break;
+				
+			(*rt)->rt_mtu -= MPLS_HDRLEN; 
+			(*rt)->rt_flags |= RTF_MPE;
+ 			
+ 			break;
+		case RTM_DELETE:
+			
+			if (*rt == NULL) 
+				break;
+			
+			if ((*rt)->rt_flags & RTF_STK) {
+				(*rt)->rt_flags &= ~RTF_STK;
+				break;
+			}
+/*
+ * XXX; ugly... but I'll reimplement this code-section...
+ */			
+			bcopy((*rt)->rt_gateway, nh, (*rt)->rt_gateway->sa_len);
+/*
+ * Restore gateway address, if fec denotes fastpath (lsp_in).
+ */		
+ 			if ((*rt)->rt_flags & RTF_GATEWAY) 
+				nh->sa_len = rt_key((*rt))->sa_len;
+			else	
+				nh->sa_len = sizeof(struct sockaddr_dl);
+				
+			error = rt_setgate((*rt), rt_key((*rt)), nh);
+			if (error != 0)
+				break;
+				
+			(*rt)->rt_mtu += MPLS_HDRLEN;
+			(*rt)->rt_flags &= ~RTF_MPE;
+			break;
+		case RTM_GET:
+			break;
+		default:
+			error = EOPNOTSUPP;
+		}
+	} else 
+		error = rtrequest_fib(cmd, 
+			ifa->ifa_addr, 
+			ifa->ifa_dstaddr, 
+			ifa->ifa_netmask, 
+			mpls_flags(ifa), 
+			rt, fibnum);
 out:
 	return (error);		
 }
@@ -242,10 +314,12 @@ out:
  *
  *  o RTF_STK, denotes label stacking, but not yet fully
  *    implemented.
+ *
+ * XXX; yeah... looks ugly... I'll refactor this stuff.
  */
 int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
-		struct rtentry **ilm, u_int fibnum)
+		struct rtentry **rt0, u_int fibnum)
 { 	
 	struct sockaddr *x = NULL;	
 	struct sockaddr *seg = NULL;
@@ -256,7 +330,9 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	struct ifaddr *oifa = NULL; 
 	struct ifaddr *ifa = NULL;
 	struct rtentry *fec = NULL;
+	struct rtentry *ilm = NULL;
 	struct ifnet *ifp = NULL;
+	struct rtentry **rt = NULL;
 	
 	int omsk = RTF_MPLS_OMASK;
 	int fmsk = RTF_MPLS;
@@ -358,11 +434,16 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 /*
  * Discard, if invalid MPLS label binding.
  */	
-	if (((flags & omsk) == RTF_SWAP) && (seg_in != seg_out)) {
+	if ((flags & RTF_SWAP) && (seg_in != seg_out)) {
 		log(LOG_INFO, "%s: ftn invalid\n", __func__);		
 		error = ESRCH;
 		goto out;
 	}
+	
+	if (flags & RTF_PUSH) 
+		rt = &fec;
+	else 
+		rt = &ilm;
 	
 	if ((ifp->if_flags & IFF_MPLS) == 0) {
 		error = ENXIO;
@@ -406,7 +487,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 				ifa = mpls_ifaof_ifpfordst(x, flags & omsk, ifp, 1);
 				if (ifa == NULL) 
 					ifa = mpls_ifawithdst_fib(x, 
-						flags & omsk, fibnum, 1);	
+						flags & omsk, fibnum, 1);
 			} else {
 /*
  * Locate nhlfe by segment.
@@ -464,7 +545,12 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  */		
 		nhlfe->mia_flags = flags;	
 		nhlfe->mia_x = oifa;
-		ifa_ref(nhlfe->mia_x);	
+		ifa_ref(nhlfe->mia_x);
+/*
+ * XXX; ugly... but I'll reimplement this...
+ */		
+		nhlfe->mia_x->ifa_rtrequest = mpls_link_rtrequest;		
+		
 /*
  * Enqueue and append nhlfe at link-level address on interface.
  */	
@@ -505,47 +591,14 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 			IF_AFDATA_WUNLOCK(ifp);	
 		}	
 /*
- * Generate incoming label map, if necessary.
+ * Generate incoming label map or annotate gateway adress on fec.
  */			
-		error = mpls_rtrequest_fib((int)rtm->rtm_type, ifa, ilm, fibnum);
+		error = mpls_rtrequest_fib((int)rtm->rtm_type, ifa, rt, fibnum);
 		if (error != 0) {
 			(void)mpls_purgeaddr(ifa);	
 			break;
 		}
-
-		if (fec != NULL) {
-			fec->rt_ifa->ifa_rtrequest = mpls_link_rtrequest;
-			
-			if ((flags & RTF_MPE) && (flags & RTF_STK)) 
-				fec->rt_flags |= RTF_STK;
-			else if (flags & RTF_MPE) {			
-				bzero(&sftn, sizeof(sftn));
-				bcopy(fec->rt_gateway, &sftn, fec->rt_gateway->sa_len);
-/*
- * Annotate gateway address on fec, if fec denotes fastpath (lsp_in).
- */		
-				sftn.sftn_len = SFTN_LEN;
-				sftn.sftn_op = flags & omsk;
-				sftn.sftn_label = seg_out;
-				sftn.sftn_vprd = seg_out;
-	
-				nh = (struct sockaddr *)&sftn;
-
-				error = rt_setgate(fec, rt_key(fec), nh);
-				if (error != 0) {
-					(void)mpls_purgeaddr(ifa);	
-					break;
-				}
-				fec->rt_mtu -= MPLS_HDRLEN; 
-				fec->rt_flags |= RTF_MPE;
- 			}
- 		}	
  		ifa->ifa_flags |= IFA_ROUTE;
-	
-		if (*ilm != NULL) {
-			RT_LOCK(*ilm); 	
-			RT_ADDREF(*ilm);
- 		} 
  		break;	
 	case RTM_DELETE:	
 /*
@@ -554,39 +607,13 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		if (ifa == NULL) {
 			error = EADDRNOTAVAIL;
 			break;
-		}
-	
-		if (fec != NULL) {
-			if (mpls_flags(ifa) & RTF_MPE) {
-				ssize_t len;
 
-				if (fec->rt_flags & RTF_STK) 
-					fec->rt_flags &= ~RTF_STK;
-				else if (fec->rt_flags & RTF_MPE) {
-/*
- * Restore gateway address, if fec denotes fastpath (lsp_in).
- */		
- 					bzero(&sftn, sizeof(sftn));
- 					nh = (struct sockaddr *)&sftn;	
- 				
- 					if (fec->rt_flags & RTF_GATEWAY) 
-						len = rt_key(fec)->sa_len;
-					else	
-						len = sizeof(struct sockaddr_dl);
-				
-					bcopy(fec->rt_gateway, nh, len);  
-					nh->sa_len = len;	
-			
-					error = rt_setgate(fec, rt_key(fec), nh);
-					if (error != 0)
-						break;
-				
-					fec->rt_mtu += MPLS_HDRLEN;
-					fec->rt_flags &= ~RTF_MPE;
-				}
-			}	
-		}	
-		error = mpls_purgeaddr(ifa);	
+		}
+		error = mpls_rtrequest_fib((int)rtm->rtm_type, ifa, rt, fibnum);
+		
+		if (error == 0) 
+			error = mpls_purgeaddr(ifa);	
+		
 		break;
 	case RTM_GET:
 /*
@@ -598,15 +625,21 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		}
 		
 		if ((flags & RTF_MPE) == 0) 
-			*ilm = rtalloc1_fib(seg, 0, 0UL, fibnum);	
+			ilm = rtalloc1_fib(seg, 0, 0UL, fibnum);	
 
-		error = (*ilm == NULL) ? EADDRNOTAVAIL : error;	
+		error = (ilm == NULL) ? EADDRNOTAVAIL : error;	
 		break;		
 	default: /* NOT REACHEED */
 		error = EOPNOTSUPP;	
 		break;
 	}
-
+	
+	if (ilm != NULL) {
+		RT_LOCK(ilm); 	
+		RT_ADDREF(ilm);
+		*rt0 = *rt;
+ 	} else
+ 		*rt0 = NULL; 
 out:	
 	if (fec != NULL) 
 		RTFREE_LOCKED(fec);
