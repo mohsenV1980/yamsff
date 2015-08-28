@@ -106,6 +106,11 @@ struct ifaddr * 	mpls_ifaof_ifpforxconnect(struct sockaddr *,
 	struct sockaddr *, struct ifnet *, int);
 struct ifaddr * 	mpls_ifawithxconnect_fib(struct sockaddr *, 
 	struct sockaddr *, u_int, int);
+
+static int 	mpls_ifinit(struct ifnet *, struct ifaddr *, struct rtentry *, 
+	struct sockaddr *, int);
+static int 	mpls_ifscrub(struct ifnet *, struct ifaddr *, struct rtentry *);
+
 int 	mpls_control(struct socket *, u_long, caddr_t, 
 	struct ifnet *, struct thread *);
 
@@ -622,41 +627,29 @@ done:
 
 /*
  * Generic mpls control operations provides
- * bindings on per-interface label space. 
+ * bindings on per-interface label space.
+ *
+ * XXX: under construction... 
  */ 
 
 int
 mpls_control(struct socket *so __unused, u_long cmd, caddr_t data, 
 		struct ifnet *ifp, struct thread *td)
 {
+	struct mpls_aliasreq *ifra = (struct mpls_aliasreq *)data;
 	struct ifreq *ifr = (struct ifreq *)data;
-	struct ifaddr *ifa = NULL;
-	struct sockaddr *seg;
+	struct sockaddr *seg, *nh;
+	int error, priv, flags;
+	struct rtentry *fec;
+	struct ifaddr *ifa, *oifa;	
+	struct mpls_ifaddr *nhlfe;
 	
-	int error, priv;
-		
-	if (ifp == NULL)
-		return (EADDRNOTAVAIL);
-	
-	if ((ifp->if_ioctl == NULL) 
-		|| (ifp->if_addr == NULL)) 
-		return (ENXIO);
+#ifdef MPLS_DEBUG
+	(void)printf("%s\n", __func__);
+#endif /* MPLS_DEBUG */
 
-	if ((ifp->if_flags & IFF_MPLS) == 0) 
-		return (EADDRNOTAVAIL);
-	
-	if (ifr == NULL) 
-		return (EINVAL);
-
-	IF_AFDATA_RLOCK(ifp);	
-	ifa = MPLS_IFINFO_IFA(ifp);
-	IF_AFDATA_RUNLOCK(ifp);
-	
-	if (ifa != NULL) 
-		ifa_ref(ifa);
-	
-	seg = &ifr->ifr_addr;
 	priv = 0;
+	error = 0;
 	
 	switch (cmd) {
 	case SIOCAIFADDR: 
@@ -666,7 +659,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  */				
 		error = mpls_sa_validate(seg, AF_MPLS);
 		if (error != 0)
-			break;	
+			goto out;	
 	
 		priv = PRIV_NET_ADDIFADDR;
 			
@@ -680,19 +673,193 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  		
  		error = priv_check(td, priv);
 		if (error != 0) 
-			break;
+			goto out;					
+			
+		if (ifra == NULL) {
+			error = EINVAL;
+			goto out;
+		}
+		seg = (struct sockaddr *)&ifra->ifra_seg;
+		nh = (struct sockaddr *)&ifra->ifra_nh;	
+		flags = ifra->ifra_flags;
  		
-		if (ifa != NULL) 
-			error = mpls_purgeaddr(ifa);
-	
-		if (cmd == SIOCDIFADDR) 
-			break;
+  		if (ifp == NULL) { 
+/*
+ * Determine, if Forward Equivalence Class (fec) still 
+ * exists as precondition for MPLS label binding.
+ */
+ 			if (((fec = rtalloc1_fib(nh, 0, 0UL, 0)) != NULL) 		
+				&& (fec->rt_gateway != NULL) 
+				&& (fec->rt_ifp != NULL)
+				&& (fec->rt_ifa != NULL) 
+				&& (fec->rt_flags & RTF_UP)) {
+/*
+ * MPLS label space scoped by set containing fec.
+ */
+				ifp = fec->rt_ifp;
+				oifa = fec->rt_ifa;
+			} else {
+				error = ESRCH;	
+				goto out;
+			}		
+		} else
+			oifa = ifp->if_addr;
 		
-		if (error == 0)			
-			error = mpls_newaddrmsg(ifp, seg);
+		ifa_ref(oifa);	
+ 						/* FALLTHROUGH */
+ 	case SIOCGIFADDR:
+ 
+ 		if (ifr == NULL) {
+			error = EINVAL;
+			goto out;
+		}
+		seg = (struct sockaddr *)&ifr->ifr_addr;
+  	
+  		if (ifp == NULL) {
+			error = EADDRNOTAVAIL;
+			goto out;
+		}
+  	
+		IF_ADDR_RLOCK(ifp);
+		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+			
+			if ((ifa->ifa_flags & IFA_NHLFE) == 0)
+				continue;
+
+			if (satosmpls_label(ifa->ifa_addr) == satosmpls_label(seg)) 
+				ifa_ref(ifa);
+				break;
+			}
+		}
+		IF_ADDR_RUNLOCK(ifp);
+	
+		if (ifa == NULL) {	
+			NHLFE_LOCK();
+			TAILQ_FOREACH(nhlfe, &mpls_ifaddrhead, mia_link) {
+			
+				if (satosmpls_label(nhlfe->mia_addr) 
+					!= satosmpls_label(seg)) 
+					break;
+			}
+		
+			if (nhlfe != NULL) {
+				ifa_ref(&nhlfe->mia_ifa);
+				ifa = &nhlfe->mia_ifa;
+			}
+			NHLFE_UNLOCK();
+		}
 		break;
-	case SIOCGIFADDR:
-		error = 0;
+	default:
+		fec = NULL;
+		ifa = oifa = NULL;	
+		nhlfe = NULL;
+		break;	
+	}	
+	
+	if (ifp == NULL) {
+		error = EADDRNOTAVAIL;
+		goto out;
+	}
+	
+	if ((ifp->if_ioctl == NULL) 
+		|| (ifp->if_addr == NULL)) { 
+		error = ENXIO;
+		goto out;
+	}
+
+	if ((ifp->if_flags & IFF_MPLS) == 0) {
+		error = EADDRNOTAVAIL;
+ 		goto out;			
+ 	}
+	
+	switch (cmd) {
+	case SIOCAIFADDR: 
+ 	case SIOCSIFADDR: 	
+	
+ 		if (ifa == NULL) { 
+/*
+ * Allocate, if possible.
+ */	
+			nhlfe = (struct mpls_ifaddr *)
+				malloc(sizeof(*nhlfe), M_IFADDR, 
+					M_ZERO|M_NOWAIT);
+		
+			if (nhlfe != NULL) {			
+				ifa = &nhlfe->mia_ifa;
+				ifa_init(ifa);				
+			} else	
+				error = ENOBUFS;
+			
+		} else if (ifa->ifa_flags & IFA_NHLFE) { 
+/*
+ * Reinitialize, if possible.
+ */										
+			if ((mpls_flags(ifa) & RTF_PUSH)
+				&& (fec != NULL)) {
+				error = EADDRINUSE;
+				break;
+			}	
+			error = mpls_purgeaddr(ifa);
+			nhlfe = (error == 0) ? ifatomia(ifa) : NULL;	
+		} else 
+			error = EADDRNOTAVAIL;
+		
+		if (nhlfe == NULL)
+			break;	
+	
+		ifa->ifa_addr = (struct sockaddr *)&nhlfe->mia_seg;
+		ifa->ifa_dstaddr = (struct sockaddr *)&nhlfe->mia_nh;	
+		ifa->ifa_netmask = (struct sockaddr *)&nhlfe->mia_seg;		
+/*
+ * Enqueue and append nhlfe at link-level address on interface.
+ */	
+		ifa_ref(ifa);
+
+		NHLFE_WLOCK();
+		TAILQ_INSERT_TAIL(&mpls_iflist, ifatomia(ifa), mia_link);	
+		NHLFE_WUNLOCK();
+
+		ifa_ref(ifa);
+
+		IF_ADDR_WLOCK(ifp);
+		TAILQ_INSERT_AFTER(&ifp->if_addrhead, ifp->if_addr, ifa, ifa_link);
+		IF_ADDR_WUNLOCK(ifp);
+		
+		ifa->ifa_ifp = ifp;	
+		ifa->ifa_metric = ifp->if_metric;
+		
+		ifa->ifa_flags |= IFA_NHLFE;
+
+
+        if ((error = mpls_ifinit(ifp, ifa, rt, seg, flags)) == 0)
+        	break;
+
+        ....
+
+							/* FALLTHROUGH */	
+	case SIOCDIFADDR:
+ 	
+ 		if (ifa == NULL) {
+ 			error = EADDRNOTAVAIL;	
+ 			break;
+ 		}
+ 		
+ 		if ((error = mpls_ifscrub(ifp, ifa, rt)) != 0) 
+ 			break;
+/*
+ * Dequeue nhlfe.
+ */	
+		IF_ADDR_WLOCK(ifp);
+		TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
+		IF_ADDR_WUNLOCK(ifp);
+		
+		ifa_free(ifa);
+	
+		NHLFE_WLOCK();
+		TAILQ_REMOVE(&mpls_iflist, ifatomia(ifa), mia_link);	
+		NHLFE_WUNLOCK();
+	
+		ifa_free(ifa);
 		break;
 	default:
 		if (ifp == NULL || ifp->if_ioctl == NULL) {
@@ -703,10 +870,242 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		break;
 	}	
 	
+out:	
+	if (fec != NULL) 
+		RTFREE_LOCKED(fec);
+
+	if (oifa != NULL)
+		ifa_free(oifa);
+
 	if (ifa != NULL)
-		ifa_free(ifa);		
+		ifa_free(ifa);			
 
 	return (error);	
+}
+
+static int  
+mpls_ifscrub(struct ifnet *ifp, struct ifaddr *ifa, struct rtentry *rt)
+{
+	struct sockaddr_ftn sftn;
+	struct sockaddr *seg;
+	
+	int error;
+	
+#ifdef MPLS_DEBUG
+	(void)printf("%s\n", __func__);
+#endif /* MPLS_DEBUG */
+	
+	bzero(&sftn, sizeof(sftn));
+	seg = (struct sockaddr *)&sftn; 
+	
+	error = 0;
+	
+	if (rt != NULL) {
+		if (rt->rt_flags & RTF_STK) 
+			rt->rt_flags &= ~RTF_STK;
+		else if (mpls_flags(ifa) & RTF_PUSH) {
+/*
+ * XXX; ugly... but I'll reimplement this code-section...
+ */			
+			bcopy(rt->rt_gateway, seg, rt->rt_gateway->sa_len);
+/*
+ * Restore gateway address, if fec denotes fastpath (lsp_in).
+ */		
+ 			if (rt->rt_flags & RTF_GATEWAY) 
+				seg->sa_len = rt_key(rt)->sa_len;
+			else	
+				seg->sa_len = sizeof(struct sockaddr_dl);
+				
+			error = rt_setgate(rt, rt_key(rt), seg);
+			if (error != 0)
+				goto out;
+				
+			rt->rt_mtu += MPLS_HDRLEN;
+			rt->rt_flags &= ~RTF_MPE;
+		} else {
+			error = rtrequest_fib((int)RTM_DELETE, 
+				ifa->ifa_addr, 
+				ifa->ifa_dstaddr, 
+				ifa->ifa_netmask, 
+				mpls_flags(ifa), 
+				rt, fibnum);
+				
+			if (error != 0)
+				goto out;	
+		}
+	} else {
+		IF_AFDATA_WLOCK(ifp);	
+		if (MPLS_IFINFO_IFA(ifp) == ifa) {
+			MPLS_IFINFO_IFA(ifp) = NULL;
+			ifp->if_flags &= ~IFF_MPE;			
+		}
+		IF_AFDATA_WUNLOCK(ifp);
+		ifa_free(ifa);	
+	}
+	bzero(seg, sizeof(sftn));	
+/*
+ * Remove corrosponding llentry{}.
+ */	
+ 	seg->sa_len = SMPLS_LEN;
+	seg->sa_family = AF_MPLS;
+ 	
+	if (mpls_flags(ifa) & RTF_PUSH)  
+		satosmpls_label(seg) = satosmpls_label(ifa->ifa_addr);
+	else 
+		satosmpls_label(seg) = satosftn_label(ifa->ifa_dstaddr);
+	
+	switch (ifp->if_type) {
+	case IFT_ETHER:	
+	case IFT_FDDI: 	/* FALLTHROUGH */
+														
+		lltable_prefix_free(seg->sa_family, seg, NULL, 0);		
+		break;
+	case IFT_LOOP:	
+	case IFT_MPLS:
+		break;
+	default:
+		break;
+	}
+/*
+ * Finalize.
+ */	
+	seg = (struct sockaddr  *)&mpls_seg(ifa);			
+	bzero(seg, sizeof(mpls_seg(ifa)));
+	seg = (struct sockaddr  *)&mpls_nh(ifa);			
+	bzero(seg, sizeof(mpls_nh(ifa)));
+	
+	mpls_flags(ifa) = 0;
+	if (mpls_x(ifa) != NULL) {
+		ifa_free(mpls_x(ifa));
+		mpls_x(ifa) = NULL;
+	}
+	mpls_lle(ifa) = NULL;	
+	
+	ifa->ifa_flags &= ~IFA_ROUTE;
+out:
+	return (error);
+}
+
+static int  
+mpls_ifinit(struct ifnet *ifp, struct ifaddr *ifa, struct rtentry *rt, 
+		struct sockaddr *sa, int flags)
+{
+	struct sockaddr_ftn sftn;
+	struct sockaddr *seg, *nh, *x;
+	struct ifaddr *oifa;
+	
+	int error;
+	
+#ifdef MPLS_DEBUG
+	(void)printf("%s\n", __func__);
+#endif /* MPLS_DEBUG */
+	
+	bzero(&sftn, sizeof(sftn));
+/*
+ * Map in-segment.
+ */	
+	seg = ifa->ifa_addr;
+	seg->sa_family = AF_MPLS;
+	seg->sa_len = SMPLS_LEN; 
+	satosmpls_label(seg) = satosmpls_label(sa) & MPLS_LABEL_MASK;
+/*
+ * Copy key for destination (x) in fec as modefied (seg_out) gateway address.
+ */		
+	nh = ifa->ifa_dstaddr;
+	
+	if (rt == NULL) {
+		oifa = ifp->if_addr;
+	else
+		oifa = rt->rt_ifa;
+	
+	ifa_ref(oifa);
+	x = oifa->ifa_dstaddr;
+	
+	bcopy(x, nh, x->sa_len);
+	nh->sa_len = SFTN_LEN;
+	
+	satosftn_op(nh) = flags & RTF_MPLS_OMASK;
+	satosftn_label(nh) = satosftn_label(sa) & MPLS_LABEL_MASK;
+	satosftn_vprd(nh) = satosftn_label(sa) & MPLS_LABEL_MASK;
+/*
+ * Apply flags and inclusion mapping on fec.
+ */		
+	mpls_flags(ifa) = flags;	
+	mpls_x(ifa) = oifa;
+	ifa_ref(oifa);
+/*
+ * XXX; ugly... but I'll reimplement this...
+ */		
+	oifa->ifa_rtrequest = mpls_link_rtrequest;		
+/*
+ * Create llentry{} by SIOCSIFADDR triggered inclusion mapping.
+ */		
+	error = (*ifp->if_ioctl)(ifp, SIOCSIFADDR, (void *)ifa);
+	if (error != 0) 
+		goto out;
+	
+	....
+	
+	
+	if (rt != NULL) {
+		if (flags & RTF_STK) 
+			rt->rt_flags |= RTF_STK;
+		else if (flags & RTF_PUSH) {
+/*
+ * XXX; ugly... but I'll reimplement this code-section...
+ */
+			...
+				
+			error = rt_setgate(rt, rt_key(rt), seg);
+			if (error != 0)
+				goto out;
+				
+			rt->rt_mtu -= MPLS_HDRLEN;
+			rt->rt_flags |= RTF_MPE;
+		} else {
+			error = rtrequest_fib((int)RTM_ADD, 
+				ifa->ifa_addr, 
+				ifa->ifa_dstaddr, 
+				ifa->ifa_netmask, 
+				mpls_flags(ifa), 
+				rt, fibnum);
+				
+			if (error != 0)
+				goto out;	
+		}
+	} else {			
+/*
+ * Bind interface, if MPLS label binding was 
+ * caused by SIOC[AS]IFADDR control operation.
+ */		
+			IF_AFDATA_WLOCK(ifp);
+			MPLS_IFINFO_IFA(ifp) = ifa;
+			ifp->if_flags |= IFF_MPE;	
+			IF_AFDATA_WUNLOCK(ifp);	
+			
+			ifa_ref(ifa);	
+	}
+	
+	...
+		
+	if (error == 0) 
+		ifa->ifa_flags |= IFA_ROUTE;
+			
+out:
+	
+	...
+
+	return (error);
+}
+
+/*
+ * Purge x-connect.
+ */
+int	
+mpls_purgeaddr(struct ifaddr *ifa)
+{
+ 	...
+
 }
 
 /*

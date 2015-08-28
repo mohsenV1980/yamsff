@@ -229,7 +229,8 @@ mpe_ioctl(struct ifnet *ifp, u_long cmd, caddr_t data)
 		
 	switch (cmd) {
 	case SIOCADDMULTI:
-	case SIOCDELMULTI:
+	case SIOCDELMULTI: 	/* FALLTHROUGH */
+	case SIOCGIFADDR:
 		break;
 	case SIOCSIFADDR:
 	

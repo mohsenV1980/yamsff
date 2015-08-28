@@ -290,8 +290,8 @@ struct mpls_aliasreq {
 	char 	ifra_name[IFNAMSIZ];
 	struct sockaddr_ftn 	ifra_seg; /* requested segment */
 	struct sockaddr_ftn 	ifra_nh;	/* next-hop */
-	struct sockaddr_ftn 	ifra_x;	/* key x in fec */
-	int 	ifra_flags;	
+	int 	ifra_flags;
+	void 	*ifra_arg
 };
 
 #ifdef _KERNEL
@@ -301,10 +301,11 @@ struct mpls_aliasreq {
  */
 struct mpls_ifaddr {
 	struct ifaddr 	mia_ifa;		/* protocol-independent info */
-#define mia_addr      mia_ifa.ifa_addr
-#define mia_mask      mia_ifa.ifa_mask
-#define mia_dstaddr   mia_ifa.ifa_dstaddr
-	
+#define mia_addr 	mia_ifa.ifa_addr
+#define mia_mask 	mia_ifa.ifa_mask
+#define mia_dstaddr 	mia_ifa.ifa_dstaddr
+#define mia_ifp 	mia_ifa.ifa_ifp;	
+#define mia_flags 	mia_ifa.ifa_flags;
 	TAILQ_ENTRY(mpls_ifaddr)	mia_link;
 	
 	struct sockaddr_ftn 	mia_seg; /* seg_i */
@@ -493,7 +494,7 @@ struct mpls_ifinfo {
  */
 TAILQ_HEAD(mpls_head, mpls_ifaddr);
 
-extern struct mpls_head 	mpls_iflist;
+extern struct mpls_head 	mpls_ifaddrhead;
 extern struct rwlock 		mpls_lock;
 
 #define	NHLFE_LOCK_ASSERT() 	rw_assert(&mpls_lock, RA_LOCKED)
