@@ -1200,7 +1200,10 @@ mpls_purgeaddr(struct ifaddr *ifa)
 #endif /* MPLS_DEBUG */
 
 	KASSERT((ifa != NULL), ("Invalid argument");
-
+	
+	if ((ifa->ifa_flags & IFA_NHLFE) == 0)
+		return;
+		
 	ifp = ifa->ifa_ifp;
 	oifa = mpls_x(ifa);
 	
