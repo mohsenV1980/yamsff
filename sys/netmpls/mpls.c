@@ -91,7 +91,7 @@ static int 	mpls_ifinit(struct ifnet *, struct ifaddr *, struct rtentry *,
 	struct sockaddr *, int);
 static int 	mpls_ifscrub(struct ifnet *, struct ifaddr *, struct rtentry *);
 
-int 	mpls_purgeaddr(struct ifaddr *);
+void 	mpls_purgeaddr(struct ifaddr *);
 
 struct ifaddr * 	mpls_ifaof_ifpforlspdst(struct sockaddr *, 
 	struct sockaddr *, struct ifnet *, int);
@@ -629,8 +629,7 @@ done:
 }
 
 /*
- * Generic mpls control operations provides
- * bindings on per-interface label space.
+ * Generic mpls control operations.
  *
  * XXX: under construction... 
  */ 
@@ -705,7 +704,6 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 				goto out;
 			}		
 		} 
-	
  						/* FALLTHROUGH */
  	case SIOCGIFADDR:
  
@@ -748,6 +746,10 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			}
 			NHLFE_UNLOCK();
 		} 
+		
+		if (ifp == NULL)
+			ifp = (ifa != NULL) ? ifa->ifa_ifp : NULL;
+		
 		break;
 	default:
 		fec = NULL;
@@ -826,8 +828,6 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
         if ((error = mpls_ifinit(ifp, ifa, rt, seg, flags)) == 0)
         	break;
 
-        ....
-
 							/* FALLTHROUGH */	
 	case SIOCDIFADDR:
  	
@@ -846,6 +846,17 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		NHLFE_WUNLOCK();
 	
 		ifa_free(ifa);
+		break;
+	case SIOCGIFADDR:
+		
+		if (ifa == NULL) {
+ 			error = EADDRNOTAVAIL;	
+ 			break;
+ 		}
+ 		bzero(seg, sizeof(*seg));
+		seg->sa_len = ifa->ifa_addr->sa_len;
+		seg->seg->sa_family = ifa->ifa_addr->sa_family;
+		satosmpls_label(seg) = satosmpls_label(ifa->ifa_addr);
 		break;
 	default:
 		if (ifp == NULL || ifp->if_ioctl == NULL) {
@@ -998,7 +1009,7 @@ mpls_ifinit(struct ifnet *ifp, struct ifaddr *ifa, struct rtentry *rt,
  */
 	sftn.sftn_len = sizeof(sftn);
 	sftn.sftn_op = flags & RTF_MPLS_OMASK;
-	sftn.sftn_label = sftn_label(sa) & MPLS_LABEL_MASK;
+	sftn.sftn_label = satosftn_label(sa) & MPLS_LABEL_MASK;
 	sftn.sftn_vprd = sftn.sftn_label;
 	
 	nh = (struct sockaddr *)&sftn;
@@ -1018,7 +1029,7 @@ mpls_ifinit(struct ifnet *ifp, struct ifaddr *ifa, struct rtentry *rt,
  */
 	ifa->ifa_addr->sa_len = sizeof(smpls);
 	ifa->ifa_addr->sa_family = AF_MPLS;
-	satosmpls_label(ifa->ifa_addr) = smpls_label(sa) & MPLS_LABEL_MASK;
+	satosmpls_label(ifa->ifa_addr) = satosmpls_label(sa) & MPLS_LABEL_MASK;
 /*
  * Apply flags and inclusion mapping on fec.
  */	
@@ -1068,11 +1079,10 @@ mpls_ifinit(struct ifnet *ifp, struct ifaddr *ifa, struct rtentry *rt,
  * Anotate gateway address with MPLS label denotes lsp_in on fec.
  */			
 			error = rt_setgate(rt, rt_key(rt), nh);
-			if (error != 0)
-				goto out;
-				
-			rt->rt_mtu -= MPLS_HDRLEN;
-			rt->rt_flags |= RTF_MPE;
+			if (error == 0) {
+				rt->rt_mtu -= MPLS_HDRLEN;
+				rt->rt_flags |= RTF_MPE;
+			}
 		} else {
 			error = rtrequest_fib((int)RTM_ADD, 
 				ifa->ifa_addr, 
@@ -1080,9 +1090,6 @@ mpls_ifinit(struct ifnet *ifp, struct ifaddr *ifa, struct rtentry *rt,
 				ifa->ifa_netmask, 
 				mpls_flags(ifa), 
 				rt, fibnum);
-				
-			if (error != 0)
-				goto out;	
 		}
 	}
 	
@@ -1178,15 +1185,41 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 	fec->rt_mtu = ifp->if_mtu;
 }
 
-
 /*
  * Purge x-connect.
  */
-int	
+void	
 mpls_purgeaddr(struct ifaddr *ifa)
-{
- 	...
+{	
+	struct ifnet *ifp;
+	struct ifaddr *oifa;
+	struct rtentry *fec;
+	
+#ifdef MPLS_DEBUG
+	(void)printf("%s\n", __func__);
+#endif /* MPLS_DEBUG */
 
+	KASSERT((ifa != NULL), ("Invalid argument");
+
+	ifp = ifa->ifa_ifp;
+	oifa = mpls_x(ifa);
+	
+	KASSERT((ifp != NULL), ("Can't assign requested address");
+	KASSERT((oifa != NULL), ("Can't assign requested address");
+	
+	if (((fec = rtalloc1_fib(oifa->ifa_addr, 0, 0UL, 0)) != NULL) 		
+		&& (fec->rt_gateway != NULL) && (fec->rt_ifp != NULL)
+		&& (fec->rt_ifa != NULL) && (fec->rt_flags & RTF_UP))
+		return;
+	
+	if (mpls_ifscrub(ifp, ifa, fec) != 0)
+		return;
+/*
+ * Dequeue nhlfe.
+ */	
+	NHLFE_WLOCK();
+	TAILQ_REMOVE(&mpls_iflist, ifatomia(ifa), mia_link);	
+	NHLFE_WUNLOCK();
 }
 
 /*

@@ -205,24 +205,42 @@ int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *,
 int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
 		struct rtentry **rt, u_int fibnum)
-{ 	
-	
-	....
+{ 		
+	struct mpls_ailiasreq ifra;
+	int error, fmsk, omask, cmd;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
+	bzero(&ifra, sizeof(ifra));
+
 	switch ((int)rtm->rtm_type) {
-	case RTM_ADD:			
-	case RTM_DELETE:	/* FALLTRHOUGH */
+	case RTM_ADD:	
+/*
+ * Apply MPLS label binding on Forward Equivalence Class (fec).
+ */		
+		cmd = SIOCSIFADDR;
+		break;		
+	case RTM_DELETE:
+/*
+ * Delete MPLS label binding on fec.
+ */
+		cmd = SIOCDIFADDR;
+		break;
 	case RTM_GET:  	
+/*
+ * Fetch Incoming Label Map (ilm) by MPLS label binding on fec.
+ */	
+		cmd = SIOCGIFADDR;
 		break;
 	default:
 		log(LOG_INFO, "%s: command invalid\n", __func__);		
 		error = EOPNOTSUPP;
 		goto out;
 	} 
+	omsk = RTF_MPLS_OMASK;
+	fmsk = RTF_MPLS;
 /*
  * Determine, if MPLS label binding is possible.
  */	
@@ -252,28 +270,34 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		goto out;
 	}
 	fmsk |= (rti_flags(rti) & RTF_STK) ? RTF_STK : RTF_MPE;	
-	flags = (rti_flags(rti) & fmsk);
+	ifra.ifra_flags = (rti_flags(rti) & fmsk);
 
 	if ((error = mpls_sa_validate(rti_gateway(rti), AF_MPLS)) != 0) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
 		goto out;	
 	} 
-	seg = rti_gateway(rti);		
-	seg_out = seg_in = satosmpls_label(seg) & MPLS_LABEL_MASK;
+	bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
 	
 	if ((error = mpls_sa_validate(rti_dst(rti), AF_UNSPEC)) != 0) {
 		log(LOG_INFO, "%s: dst in fec invalid\n", __func__);
 		goto out;	
 	}
-	x = rti_dst(rti);	  	
-
- ...
+	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);	  	
+/*
+ * Perform MPLS control operations on interface-layer.
+ */
+	error = mpls_control(NULL, cmd, (void *)&ifra, NULL, NULL);
 	
-out:	
-
+	if (cmd  == SIOCGIFADDR) {
+/*
+ * Fetch ilm, if fec does not denote ingress route by lsp_in.
+ */		
+		if ((ifra.ifra_flags & RTF_MPE) == 0) 
+			*rt = rtalloc1_fib(seg, 0, 0UL, fibnum);	
 		
-	....
-	
+		error = (*rt == NULL) ? EADDRNOTAVAIL : error;	
+	}
+out:	
 	return (error);
 }
 #undef rti_dst
