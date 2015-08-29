@@ -499,7 +499,7 @@ mpls_sftncopyin(struct sockaddr *sa0, struct sockaddr *sa1,
  * Zero out until < op, seg_out, rd >.
  */		
 	for (;max0 < max1; max0++)
-		*max0 & 0x00; 	
+		*max0 &= 0x00; 	
 
 	if (sa2 != NULL) {
 		y = sa2->sa_data; 	/* destination */
