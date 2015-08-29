@@ -167,11 +167,7 @@ mpls_rn_inithead(void **rnh0, int off)
 /*
  * X-connect.
  */
- 
-int 	mpls_rtrequest_fib(int cmd, struct ifaddr *, 
-	struct rtentry **, u_int);
-int		mpls_purgeaddr(struct ifaddr *);
-void 	mpls_link_rtrequest(int, struct rtentry *, struct rt_addrinfo *);
+
 int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *, 
 	struct rtentry **, u_int);
 
@@ -279,90 +275,6 @@ out:
 	....
 	
 	return (error);
-}
-
-
-/*
- * Implements temporary queue, holds set containing 
- * nhlfe maps to fec during mpls_link_rtrequest.
- */
-struct mpls_ifaddrbuf {
-	TAILQ_ENTRY(mpls_ifaddrbuf)	ib_chain;
-	struct ifaddr	*ib_nhlfe;
-};
-TAILQ_HEAD(mpls_ifaddrbuf_hd, mpls_ifaddrbuf);
-
-/*
- * Purge ftn maps to fec, when fec invalidates. 
- *
- * XXX: incomplete...
- */
-void
-mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
-{
-	struct mpls_ifaddrbuf_hd hd;
-	
-	struct ifnet *ifp;
-	struct ifaddr *ifa;
-	
-	struct mpls_ifaddrbuf *ib;
-
-#ifdef MPLS_DEBUG
-	(void)printf("%s\n", __func__);
-#endif /* MPLS_DEBUG */
-
-	RT_LOCK_ASSERT(fec);
-	TAILQ_INIT(&hd);
-	ifp = fec->rt_ifp;
-
-	switch (cmd) {
-	case RTM_ADD:
-		break;
-	case RTM_CHANGE:	
-	case RTM_DELETE:
-/*
- * Build subset.
- */			
-		IF_ADDR_RLOCK(ifp);
-		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-		
-			if ((ifa->ifa_flags & IFA_NHLFE) == 0)
-				continue;
-				
-			if (mpls_sa_equal(rt_key(fec), 
-				(struct sockaddr *)&mpls_x(ifa)) == 0)
-				continue;
-	
-			ifa_ref(ifa);
-/*
- * Can't fail.
- */			
-			ib = malloc(sizeof(*ib), M_TEMP, M_WAITOK|M_ZERO);
-			ib->ib_nhlfe = ifa;	
-			
-			TAILQ_INSERT_TAIL(&hd, ib, ib_chain);
-		}
-		IF_ADDR_RUNLOCK(ifp);	
-/*
- * Purge collection.
- */
-		while (!TAILQ_EMPTY(&hd)) {
-			ib = TAILQ_FIRST(&hd);
-			
-			(void)mpls_purgeaddr(ib->ib_nhlfe);     	 	
-			
-			TAILQ_REMOVE(&hd, ib, ib_chain);
-			
-			ifa_free(ib->ib_nhlfe);
-			ib->ib_nhlfe = NULL;
-			
-			free(ib, M_TEMP);
-		}
-	    break;
-	default:
-		break;
-	}			
-	fec->rt_mtu = ifp->if_mtu;
 }
 #undef rti_dst
 #undef rti_gateway

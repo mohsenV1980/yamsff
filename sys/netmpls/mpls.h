@@ -288,8 +288,8 @@ struct sockaddr_ftn {
  */
 struct mpls_aliasreq {
 	char 	ifra_name[IFNAMSIZ];
-	struct sockaddr_ftn 	ifra_seg; /* requested segment */
-	struct sockaddr_ftn 	ifra_nh;	/* next-hop */
+	struct sockaddr_ftn 	ifra_seg; 	/* requested segment */
+	struct sockaddr_ftn 	ifra_x; 	/* destination x in fec */
 	int 	ifra_flags;
 	void 	*ifra_arg
 };
@@ -398,6 +398,8 @@ mpls_sa_validate(struct sockaddr *sa, sa_family_t af)
 	int error;
 	ssize_t nlen;
 	
+	KASSERT((sa != NULL), ("Invalid argument"));
+	
 	error = 0;
 	nlen = SFTN_LEN;
 	
@@ -441,6 +443,9 @@ mpls_sa_equal(struct sockaddr *sa0, struct sockaddr *sa1)
 	const char *x_1; 
 	const char *x_0; 
 	const char *max;
+
+	KASSERT((sa0 != NULL), ("Invalid argument"));
+	KASSERT((sa1 != NULL), ("Invalid argument"));
 /*
  * Constraint, x_0 maps to sa0 denotes prefix in x_1 maps to sa1.
  */	
@@ -465,6 +470,53 @@ mpls_sa_equal(struct sockaddr *sa0, struct sockaddr *sa1)
 out:	
 	return (equals);
 }
+
+static __inline void  	mpls_sftncopyin(struct sockaddr *, 
+	struct sockaddr *, struct sockaddr *);
+static __inline void 
+mpls_sftncopyin(struct sockaddr *sa0, struct sockaddr *sa1, 
+		struct sockaddr *sa2)
+{
+	char *y, *x1, *x0, *max0, *max1;
+	
+	KASSERT((sa0 != NULL), ("Invalid argument"));
+	KASSERT((sa1 != NULL), ("Invalid argument"));
+	
+	x1 = sa1->sa_data; 	/* storage for < op, seg_out, rd > */
+	x0 = sa0->sa_data; 	/* source */ 
+/*
+ * [max0; max1[ denotes padding between data and < op, seg_out, rd >.
+ */
+	max0 = x1 + (sa0->sa_len - offsetof(struct sockaddr, sa_data));
+	max1 = x1 + (offsetof(struct sockaddr, sa_data) - 
+		offsetof(struct sockaddr_ftn, sftn_op));
+/*
+ * Copy data.
+ */	
+	for (;x0 < max0; x0++, x1++) 
+		*x1 = *x0;
+/*
+ * Zero out until < op, seg_out, rd >.
+ */		
+	for (;max0 < max1; max0++)
+		*max0 & 0x00; 	
+
+	if (sa2 != NULL) {
+		y = sa2->sa_data; 	/* destination */
+/*
+ * Reinitialize.
+ */	
+		x1 = sa1->sa_data;
+		max0 = x1 + (sa1->sa_len - offsetof(struct sockaddr, sa_data);
+/*
+ * Finalize.
+ */	
+		for (;y < max0; y++, x1++) 
+			*y = *x1;
+	}
+} 
+
+
 
 /*
  * MPLS per-interface state.
