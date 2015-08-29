@@ -991,18 +991,11 @@ mpls_ifinit(struct ifnet *ifp, struct ifaddr *ifa, struct rtentry *rt,
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
-		
-/*
- * Map in-segment.
- */
-	ifa->ifa_addr->sa_len = sizeof(smpls);
-	ifa->ifa_addr->sa_family = AF_MPLS;
-	satosmpls_label(ifa->ifa_addr) = smpls_label(sa) & MPLS_LABEL_MASK;
-/*
- * Map out-segment.
- */
+
 	bzero(&sftn, sizeof(sftn));
-	
+/*
+ * Prepare storage for gateway address and < op, seg_out, rd >.	
+ */
 	sftn.sftn_len = sizeof(sftn);
 	sftn.sftn_op = flags & RTF_MPLS_OMASK;
 	sftn.sftn_label = sftn_label(sa) & MPLS_LABEL_MASK;
@@ -1016,8 +1009,16 @@ mpls_ifinit(struct ifnet *ifp, struct ifaddr *ifa, struct rtentry *rt,
 		oifa = rt->rt_ifa;
 		
 	ifa_ref(oifa);
-	
+/*
+ * Map out-segment.
+ */	
 	mpls_sftncopyin(oifa->ifa_addr, nh, ifa->ifa_dstaddr);
+/*
+ * Map in-segment.
+ */
+	ifa->ifa_addr->sa_len = sizeof(smpls);
+	ifa->ifa_addr->sa_family = AF_MPLS;
+	satosmpls_label(ifa->ifa_addr) = smpls_label(sa) & MPLS_LABEL_MASK;
 /*
  * Apply flags and inclusion mapping on fec.
  */	

@@ -488,8 +488,8 @@ mpls_sftncopyin(struct sockaddr *sa0, struct sockaddr *sa1,
  * [max0; max1[ denotes padding between data and < op, seg_out, rd >.
  */
 	max0 = x1 + (sa0->sa_len - offsetof(struct sockaddr, sa_data));
-	max1 = x1 + (offsetof(struct sockaddr, sa_data) - 
-		offsetof(struct sockaddr_ftn, sftn_op));
+	max1 = x1 + (offsetof(struct sockaddr_ftn, sftn_op) - 
+		offsetof(struct sockaddr, sa_data));
 /*
  * Copy data.
  */	
