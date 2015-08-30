@@ -159,7 +159,6 @@ mpls_rn_inithead(void **rnh0, int off)
 int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *, 
 	struct rtentry **, u_int);
 
-
 /*
  * Accept by socket(4) in AF_ROUTE or by mpls_control received 
  * service requests.
@@ -259,14 +258,14 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		goto out;
 	}
 		
-	if (rti_gateway(rti)->sa__len > sizeof(ifra.ifra_seg)) {
+	if (rti_gateway(rti)->sa_len > sizeof(ifra.ifra_seg)) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
 		error = EMSGSIZE;
 		goto out;
 	}
 	bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
 	
-	if (rti_dst(rti)->sa__len > sizeof(ifra.ifra_x)) {
+	if (rti_dst(rti)->sa_len > sizeof(ifra.ifra_x)) {
 		log(LOG_INFO, "%s: destination x in fec invalid\n", __func__);
 		error = EMSGSIZE;
 		goto out;
