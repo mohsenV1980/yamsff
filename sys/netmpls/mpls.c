@@ -360,7 +360,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	struct sockaddr *seg, *x;
 	int error, priv, flags;
 	struct rtentry *fec;
-	struct ifaddr *ifa;	
+	struct ifaddr *ifa, oifa;	
 	struct mpls_ifaddr *mia;
 	
 #ifdef MPLS_DEBUG
@@ -405,7 +405,22 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		}
 		seg = (struct sockaddr *)&ifra->ifra_seg;
 		x = (struct sockaddr *)&ifra->ifra_x;	
-		flags = ifra->ifra_flags;
+		
+		if (x->sa_family == AF_UNSPEC) {
+/*
+ * Per-interface MPLS label space.
+ */		
+			if (ifp == NULL) {
+				error = EADDRNOTAVAIL;
+				goto out;
+			}
+			ifa_ref(ifp->if_addr);
+			oifa = ifp->if_addr;
+			x = oifa->ifa_addr;
+			
+			flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
+		} else
+			flags = ifra->ifra_flags;
  		
  		break;
  	case SIOCGIFADDR:
@@ -421,7 +436,10 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			goto out;
 		}
 		seg = &ifr->ifr_addr;
-		x = ifp->if_addr->ifa_addr;
+		
+		ifa_ref(ifp->if_addr);
+		oifa = ifp->if_addr;
+		x = oifa->ifa_addr;
 	}
  	
 	switch (cmd) {
@@ -432,18 +450,37 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  * as precondition for MPLS label binding on MPLS label space 
  * scoping set containing fec.
  */
- 		fec = rtalloc1_fib(x, 0, 0UL, 0);
- 		if (fec == NULL) 		
-			|| (fec->rt_gateway == NULL) 
-			|| (fec->rt_ifp == NULL)
-			|| (fec->rt_ifa == NULL) 
-			|| ((fec->rt_flags & RTF_UP) == 0)) {
+ 		if ((x->sa_family == AF_LINK)
+			&& (flags & RTF_LLDATA)
+			&& (flags & RTF_PUSH) 
+			&& (flags & RTF_MPE)) {
+/*
+ * Per-interface MPLS label space.
+ */
+ 			oifa = (oifa == NULL) ? ifa_ifwithaddr(x) : oifa;
+ 			
+ 			if (oifa == NULL) {	
+ 				error = EADDRNOTAVAIL;
+ 				goto out;
+ 			}
+ 			ifp = (ifp == NULL) ? oifa->ifa_ifp : ifp;
+ 			
+		} else if (((fec = rtalloc1_fib(x, 0, 0UL, 0)) != NULL) 		
+			&& (fec->rt_gateway != NULL) 
+			&& (fec->rt_ifp != NULL)
+			&& (fec->rt_ifa != NULL) 
+			&& (fec->rt_flags & RTF_UP)) {
+/*
+ * MPLS label space scoped by set containing fec.
+ */
+			ifp = (ifp == NULL) ? fec->rt_ifp : ifp;
+		} else {
+			log(LOG_INFO, "%s: fec invalid\n", __func__);
 			error = ESRCH;	
 			goto out;
 		}
-		ifp = (ifp == NULL) ? fec->rt_ifp : ifp;		
-		
  						/* FALLTHROUGH */
+ 						
  	case SIOCGIFADDR:
  	case SIOCSIFADDR: 	
  
@@ -507,10 +544,10 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  * RTF_LLDATA, nhlfe is linked to an interface in link-layer 
  * where targeted interface represents fec by nhlfe itself. 
  */	
-		flags = RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE;
+		flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
 			
 	case SIOCAIFADDR: 	
-
+	
  		              /* FALLTHROUGH */  
  		
  		if (ifa == NULL) { 
@@ -598,9 +635,8 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		}
 		error = (*ifp->if_ioctl)(ifp, cmd, data);
 		break;
-	}	
-	
-out:	
+	}
+out:
 	if (fec != NULL) 
 		RTFREE_LOCKED(fec);
 
@@ -709,11 +745,11 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	bzero(seg, sizeof(mpls_nh(ifa)));
 	
 	mia->mia_rt_flags = 0;
-	if (mpls_x(ifa) != NULL) {
-		ifa_free(mpls_x(ifa));
-		mpls_x(ifa) = NULL;
+	if (mia->mia_x != NULL) {
+		ifa_free(mia->mia_x);
+		mia->mia_x = NULL;
 	}
-	mpls_lle(ifa) = NULL;	
+	mia->mia_lle = NULL;	
 	
 	ifa->ifa_flags &= ~IFA_ROUTE;
 	
@@ -770,10 +806,9 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 /*
  * XXX; ugly... but I'll reimplement this...
  */		
-	mpls_x(ifa) = oifa;
-	
 	ifa_ref(oifa);
-	
+	mia->mia_x = oifa;
+
 	oifa->ifa_rtrequest = mpls_link_rtrequest;	
 		
 	mia->mia_ifp = ifp;	
@@ -821,7 +856,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 				mia->mia_addr, 
 				mia->mia_dstaddr, 
 				mia->mia_netmask, 
-				mia->mia_flags, 
+				mia->mia_rt_flags, 
 				rt, fibnum);
 		}
 	}
@@ -902,7 +937,7 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 		while (!TAILQ_EMPTY(&hd)) {
 			ib = TAILQ_FIRST(&hd);
 			
-			(void)mpls_purgeaddr(ib->ib_nhlfe);     	 	
+			mpls_purgeaddr(ib->ib_nhlfe);     	 	
 			
 			TAILQ_REMOVE(&hd, ib, ib_chain);
 			
@@ -961,7 +996,7 @@ mpls_purgeaddr(struct ifaddr *ifa)
  * Dequeue nhlfe.
  */	
 	NHLFE_WLOCK();
-	TAILQ_REMOVE(&mpls_iflist, ifatomia(ifa), mia_link);	
+	TAILQ_REMOVE(&mpls_iflist, mia, mia_link);	
 	NHLFE_WUNLOCK();
 out:	
 	if (fec != NULL) 

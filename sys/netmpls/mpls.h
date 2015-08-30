@@ -329,7 +329,7 @@ struct mpls_ifaddr {
 #define mpls_x(_ifa) \
 	(ifatomia(_ifa)->mia_x)	
 #define mpls_flags(_ifa) \
-	(ifatomia(_ifa)->mia_flags)	
+	(ifatomia(_ifa)->mia_rt_flags)	
 #define mpls_seg(_ifa) \
 	(ifatomia(_ifa)->mia_seg)
 #define mpls_nh(_ifa) \
