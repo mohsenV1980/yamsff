@@ -189,18 +189,11 @@ int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *,
  *   
  *    RTF_[POP|PUSH|SWAP] - self expanatory.
  *
- *    RTF_MPE denotes that by fec generated nhlfe encodes 
- *    by seg_j initial label of Label Switch Path (lsp) in 
- *    data plane.
- *
- *    RTF_LLDATA denotes that nhlfe is linked to an interface 
- *    in link-layer where targeted interface represents fec by 
- *    nhlfe itself. RTF_LLDATA occours combined with RTF_MPE.
+ *    RTF_MPE, by fec generated nhlfe encodes with seg_j initial 
+ *    label of Label Switch Path (lsp) in data plane.
  *
  *  o RTF_STK, denotes label stacking, but not yet fully
  *    implemented.
- *
- * XXX; under construction.
  */
 int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
@@ -220,7 +213,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 /*
  * Apply MPLS label binding on Forward Equivalence Class (fec).
  */		
-		cmd = SIOCSIFADDR;
+		cmd = SIOCAIFADDR;
 		break;		
 	case RTM_DELETE:
 /*

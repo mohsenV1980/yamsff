@@ -306,12 +306,13 @@ struct mpls_ifaddr {
 #define mia_dstaddr 	mia_ifa.ifa_dstaddr
 #define mia_ifp 	mia_ifa.ifa_ifp;	
 #define mia_flags 	mia_ifa.ifa_flags;
+#define mia_metric 	mia_ifa.ifa_metric;
 	TAILQ_ENTRY(mpls_ifaddr)	mia_link;
 	
 	struct sockaddr_ftn 	mia_seg; /* seg_i */
 	struct sockaddr_ftn 	mia_nh; 	/* < x, op, seg_j, rd > */
 	
-	int 	mia_flags;
+	int 	mia_rt_flags;
 	
 	struct ifaddr 	*mia_x; 	/* backpointer for ifaddr(9) on fec */
 	struct llentry 	*mia_lle; 	/* shortcut */	
