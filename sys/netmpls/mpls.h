@@ -390,50 +390,6 @@ mpls_rtfree(struct mpls_ro *mro)
 }
 
 /*
- * Validate socket address about its length and type.
- */
-static __inline int 	mpls_sa_validate(struct sockaddr *, sa_family_t);
-static __inline int 	
-mpls_sa_validate(struct sockaddr *sa, sa_family_t af) 
-{
-	int error;
-	ssize_t nlen;
-	
-	KASSERT((sa != NULL), ("Invalid argument"));
-	
-	error = 0;
-	nlen = SFTN_LEN;
-	
-	if (af == AF_MPLS) {	
-		if (sa->sa_family == af) {
-			error = (sa->sa_len != nlen) ?
-				EINVAL : error;
-		} else
-			error = EINVAL;
-			
-		goto out;
-	}
-		
-	switch (sa->sa_family) {
-	case AF_INET:
-#ifdef INET6		
-	case AF_INET6:
-#endif /* INET6 */	
-	case AF_LINK:
-		error = (sa->sa_len > nlen) ? EMSGSIZE : error;
-		break;
-	default:
-/*
- * Unsupported domain.
- */			
-		error = EAFNOSUPPORT;
-		break;
-	}
-out:	
-	return (error);
-}
-
-/*
  * Compare socket addresses.
  */
 static __inline int 	mpls_sa_equal(struct sockaddr *, struct sockaddr *);

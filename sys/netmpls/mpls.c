@@ -375,11 +375,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	case SIOCSIFADDR:
 /*
  * Request MPLS label binding on selected interface.
- */				
-		error = mpls_sa_validate(seg, AF_MPLS);
-		if (error != 0)
-			goto out;	
-	
+ */			
 		priv = PRIV_NET_ADDIFADDR;
 			
 							/* FALLTHROUGH */	
@@ -403,7 +399,17 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			error = EINVAL;
 			goto out;
 		}
-		seg = (struct sockaddr *)&ifra->ifra_seg;
+		
+		if (ifra->ifra_seg.sftn_family != AF_MPLS) {
+			error = EINVAL;
+			goto out;
+		}
+		
+		if (ifra->ifra_seg.sftn_len > sizeof(ifra->ifra_seg)) {
+			error = EMSGSIZE;
+			goto out;
+		}
+		seg = (struct sockaddr *)&ifra->ifra_seg;	
 		x = (struct sockaddr *)&ifra->ifra_x;	
 		
 		if (x->sa_family == AF_UNSPEC) {
@@ -433,6 +439,16 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  		
  		if (ifr == NULL) {
 			error = EINVAL;
+			goto out;
+		}
+		
+		if (ifr->ifr_addr.sa_family != AF_MPLS) {
+			error = EINVAL;
+			goto out;
+		}
+		
+		if (ifr->ifr_addr.sa_len > sizeof(ifr->ifr_addr) {
+			error = EMSGSIZE;
 			goto out;
 		}
 		seg = &ifr->ifr_addr;
@@ -573,7 +589,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 				error = EADDRINUSE;
 				break;
 			}	
-			error = mpls_ifscrub(ifa, fec);
+			error = mpls_ifscrub(ifatomia(ifa), fec);
 			mia = (error == 0) ? ifatomia(ifa) : NULL;	
 		} else 
 			error = EADDRNOTAVAIL;
@@ -592,9 +608,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		NHLFE_WLOCK();
 		TAILQ_INSERT_TAIL(&mpls_iflist, mia, mia_link);	
 		NHLFE_WUNLOCK();
-
-		ifa_ref(ifa);
-
+		
 		ifa->ifa_flags |= IFA_NHLFE;
 
 		error = mpls_ifinit(ifp, mia, rt, seg, flags);
@@ -778,7 +792,12 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  */
 	sftn.sftn_len = sizeof(sftn);
 	sftn.sftn_op = flags & RTF_MPLS_OMASK;
-	sftn.sftn_label = satosftn_label(sa) & MPLS_LABEL_MASK;
+	
+	if (flags & RTF_PUSH)  
+		sftn.sftn_label = satosmpls_label(sa) & MPLS_LABEL_MASK;
+	else 
+		sftn.sftn_label = satosftn_label(sa) & MPLS_LABEL_MASK;
+	
 	sftn.sftn_vprd = sftn.sftn_label;
 	
 	nh = (struct sockaddr *)&sftn;

@@ -54,31 +54,6 @@
 #include <netinet/ip.h>
 #include <netmpls/mpls.h>
 
-extern struct ifaddr * 	mpls_ifawithseg_fib(struct sockaddr *, 
-	u_int, int);
-extern struct ifaddr * 	mpls_ifaof_ifpforseg(struct sockaddr *, 
-	struct ifnet *, int);
-struct ifaddr * 	mpls_ifawithdst_fib(struct sockaddr *, int, u_int, int);
-struct ifaddr * 	mpls_ifaof_ifpfordst(struct sockaddr *, int, 
-	struct ifnet *, int);
-extern struct ifaddr * 	mpls_ifaof_ifpforxconnect(struct sockaddr *, 
-	struct sockaddr *, struct ifnet *, int);
-extern struct ifaddr * 	mpls_ifawithxconnect_fib(struct sockaddr *, 
-	struct sockaddr *, u_int, int);
-
-/*
- * Accessor macros for rtinfo{} SPI.
- */
-#define	rti_dst(_rti) 	((_rti)->rti_info[RTAX_DST])
-#define	rti_gateway(_rti) 	((_rti)->rti_info[RTAX_GATEWAY])
-#define	rti_netmask(_rti) 	((_rti)->rti_info[RTAX_NETMASK])
-#define	rti_ifaaddr(_rti) 	((_rti)->rti_info[RTAX_IFA])
-#define	rti_ifpaddr(_rti) 	((_rti)->rti_info[RTAX_IFP])
-#define	rti_brd(_rti) 	((_rti)->rti_info[RTAX_BRD])
-#define	rti_flags(_rti) 	((_rti)->rti_flags)
-#define rti_ifa(_rti) 	((_rti)->rti_ifa)
-#define rti_ifp(_rti) 	((_rti)->rti_ifp)
-
 /*
  * Radix-trie containing (free) generated ilm.
  */
@@ -163,6 +138,19 @@ mpls_rn_inithead(void **rnh0, int off)
 	}
 	return (error);
 }
+
+/*
+ * Accessor macros for rtinfo{} Service Primitive (spi).
+ */
+#define	rti_dst(_rti) 	((_rti)->rti_info[RTAX_DST])
+#define	rti_gateway(_rti) 	((_rti)->rti_info[RTAX_GATEWAY])
+#define	rti_netmask(_rti) 	((_rti)->rti_info[RTAX_NETMASK])
+#define	rti_ifaaddr(_rti) 	((_rti)->rti_info[RTAX_IFA])
+#define	rti_ifpaddr(_rti) 	((_rti)->rti_info[RTAX_IFP])
+#define	rti_brd(_rti) 	((_rti)->rti_info[RTAX_BRD])
+#define	rti_flags(_rti) 	((_rti)->rti_flags)
+#define rti_ifa(_rti) 	((_rti)->rti_ifa)
+#define rti_ifp(_rti) 	((_rti)->rti_ifp)
  
 /*
  * X-connect.
@@ -265,15 +253,23 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	fmsk |= (rti_flags(rti) & RTF_STK) ? RTF_STK : RTF_MPE;	
 	ifra.ifra_flags = (rti_flags(rti) & fmsk);
 
-	if ((error = mpls_sa_validate(rti_gateway(rti), AF_MPLS)) != 0) {
+	if (rti_gateway(rti)->sa_family != AF_MPLS) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
-		goto out;	
-	} 
+		error = EINVAL;
+		goto out;
+	}
+		
+	if (rti_gateway(rti)->sa__len > sizeof(ifra.ifra_seg)) {
+		log(LOG_INFO, "%s: segment invalid\n", __func__);
+		error = EMSGSIZE;
+		goto out;
+	}
 	bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
 	
-	if ((error = mpls_sa_validate(rti_dst(rti), AF_UNSPEC)) != 0) {
-		log(LOG_INFO, "%s: dst in fec invalid\n", __func__);
-		goto out;	
+	if (rti_dst(rti)->sa__len > sizeof(ifra.ifra_x)) {
+		log(LOG_INFO, "%s: destination x in fec invalid\n", __func__);
+		error = EMSGSIZE;
+		goto out;
 	}
 	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);	  	
 /*
