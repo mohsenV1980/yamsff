@@ -374,14 +374,14 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	case SIOCAIFADDR:
 	case SIOCSIFADDR:
 /*
- * Request MPLS label binding on selected interface.
+ * Superuser is only capable adding MPLS label bindings.
  */			
 		priv = PRIV_NET_ADDIFADDR;
 			
 							/* FALLTHROUGH */	
 	case SIOCDIFADDR:	
 /*
- * Delete MPLS label binding.
+ * Superuser is only capable removing MPLS label bindings.
  */				
  		if (priv != PRIV_NET_ADDIFADDR)
 			priv = PRIV_NET_DELIFADDR;
@@ -427,7 +427,6 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
 		} else
 			flags = ifra->ifra_flags;
- 		
  		break;
  	case SIOCGIFADDR:
  	case SIOCSIFADDR: 	/* FALLTHROUGH */
@@ -441,13 +440,13 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			error = EINVAL;
 			goto out;
 		}
-		
+	
 		if (ifr->ifr_addr.sa_family != AF_MPLS) {
 			error = EINVAL;
 			goto out;
 		}
 		
-		if (ifr->ifr_addr.sa_len > sizeof(ifr->ifr_addr) {
+		if (ifr->ifr_addr.sa_len > sizeof(ifr->ifr_addr)) {
 			error = EMSGSIZE;
 			goto out;
 		}
@@ -491,7 +490,6 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  */
 			ifp = (ifp == NULL) ? fec->rt_ifp : ifp;
 		} else {
-			log(LOG_INFO, "%s: fec invalid\n", __func__);
 			error = ESRCH;	
 			goto out;
 		}
@@ -499,7 +497,9 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  						
  	case SIOCGIFADDR:
  	case SIOCSIFADDR: 	
- 
+/*
+ * Fetch Next Hop Label Forwarding Entry (nhlfe).
+ */ 
 		IF_ADDR_RLOCK(ifp);
 		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 			
@@ -556,6 +556,9 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	case SIOCSIFADDR: 
 /*
  * MPLS label binding scoping per-interface label space.
+ *
+ * RTF_MPE, by fec generated nhlfe encodes with seg_j initial 
+ * label of Label Switch Path (lsp) in data plane.
  *
  * RTF_LLDATA, nhlfe is linked to an interface in link-layer 
  * where targeted interface represents fec by nhlfe itself. 
@@ -643,10 +646,6 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  		*(struct sockaddr_mpls *)&ifr->ifr_addr = mia->mia_seg;
 		break;
 	default:
-		if (ifp == NULL || ifp->if_ioctl == NULL) {
-			error = EOPNOTSUPP;
-			break;
-		}
 		error = (*ifp->if_ioctl)(ifp, cmd, data);
 		break;
 	}
@@ -663,6 +662,9 @@ out:
 	return (error);	
 }
 
+/*
+ * Finalize MPLS label binding.
+ */
 static int  
 mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 {
@@ -772,6 +774,9 @@ out:
 	return (error);
 }
 
+/*
+ * Initialize MPLS label binding.
+ */
 static int  
 mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt, 
 		struct sockaddr *sa, int flags)
