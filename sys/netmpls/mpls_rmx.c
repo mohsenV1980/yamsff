@@ -190,7 +190,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		struct rtentry **rt, u_int fibnum)
 { 		
 	struct mpls_aliasreq ifra;
-	struct ifaddr *ifa; 
+	struct ifaddr *ifa = NULL; 
 	struct ifnet *ifp;
 	int error, cmd;
 	
@@ -221,12 +221,13 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
-	
 	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);
 	bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
 	
 	ifra.ifra_flags = rti_flags(rti);
-
+/*
+ * Perform MPLS control operations on interface-layer.
+ */	
  	switch ((int)rtm->rtm_type) {
 	case RTM_ADD:	
 /*
@@ -251,9 +252,6 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EOPNOTSUPP;
 		goto out;
 	}
-/*
- * Perform MPLS control operations on interface-layer.
- */	
  	error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
 	
 	if (cmd  == SIOCGIFADDR) {
