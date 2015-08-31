@@ -8,11 +8,12 @@ Ongoing operational tasks:
  
  o Testing components and bugfixes (or refactoring some parts).
  o Review of ifconfig(8) and bugfixes (or refactoring some parts).
- o Adding modefied netstat(8) command.
+ o Adding by AF_MPLS domain extended netstat(8) command.
  o Writing detailed implementation notes.
  o Starting of tasks for IPv6 integration.
  o Manual pages and misc. documentation.
  o Fixes targeting my bad orthography.
+ o Transition from 10.1 to 10.2. 
 
 Additional information about contacting
 ---------------------------------------
@@ -285,6 +286,16 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                             Kernel Programming Interface (kpi) for 
                             generating or manipulating MPLS labeled
                             pdu.
+                            
+                 pfil/   
+                 
+                  Integration of inspecting frames containing  
+                  
+                   (a) sdu originating AF_MPLS domain and  
+                   
+                   (b) rfc-2516 based sdu
+                   
+                  by ipfw(4).
                  
 How to install?
 ---------------                
