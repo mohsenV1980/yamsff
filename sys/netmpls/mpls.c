@@ -81,6 +81,21 @@
 #include <netinet/ip6.h>
 #endif /* INET6 */
 
+/*
+ * Implements temporary queue, holds set containing 
+ * nhlfe maps to fec during mpls_link_rtrequest.
+ */
+struct mpls_ifaddrbuf {
+	TAILQ_ENTRY(mpls_ifaddrbuf)	ib_chain;
+	struct ifaddr	*ib_nhlfe;
+};
+TAILQ_HEAD(mpls_ifaddrbuf_hd, mpls_ifaddrbuf);
+
+static int 	mpls_ifinit(struct ifnet *, struct mpls_ifaddr *, 
+	struct rtentry *, struct sockaddr *, int);
+static int 	mpls_ifscrub(struct ifnet *, struct mpls_ifaddr *, 
+	struct rtentry *);	
+
 struct ifaddr * 	mpls_ifaof_ifpforlspdst(struct sockaddr *, 
 	struct sockaddr *, struct ifnet *, int);
 struct ifaddr * 	mpls_ifaof_ifpforlsp(struct sockaddr *, 
@@ -94,6 +109,12 @@ struct ifaddr * 	mpls_ifaof_ifpforxconnect(struct sockaddr *,
 	struct sockaddr *, struct ifnet *, int);
 struct ifaddr * 	mpls_ifawithxconnect_fib(struct sockaddr *, 
 	struct sockaddr *, u_int, int);
+
+void 	mpls_purgeaddr(struct ifaddr *);
+void 	mpls_link_rtrequest(int, struct rtentry *, 
+	struct rt_addrinfo *);
+int 	mpls_control(struct socket *, u_long, caddr_t, 
+	struct ifnet *, struct thread *);
 
 /*
  * Locate nhlfe by its key (seg_in).
@@ -425,28 +446,6 @@ done:
 		ifa_free(ifa);
 	return (ifa);
 }
-
-static int 	mpls_ifinit(struct ifnet *, struct mpls_ifaddr *, 
-	struct rtentry *, struct sockaddr *, int);
-static int 	mpls_ifscrub(struct ifnet *, struct mpls_ifaddr *, 
-	struct rtentry *);	
-
-void 	mpls_purgeaddr(struct ifaddr *);
-void 	mpls_link_rtrequest(int, struct rtentry *, 
-
-	struct rt_addrinfo *);
-int 	mpls_control(struct socket *, u_long, caddr_t, 
-	struct ifnet *, struct thread *);
-
-/*
- * Implements temporary queue, holds set containing 
- * nhlfe maps to fec during mpls_link_rtrequest.
- */
-struct mpls_ifaddrbuf {
-	TAILQ_ENTRY(mpls_ifaddrbuf)	ib_chain;
-	struct ifaddr	*ib_nhlfe;
-};
-TAILQ_HEAD(mpls_ifaddrbuf_hd, mpls_ifaddrbuf);
 
 /*
  * Purge ftn maps to fec, when fec invalidates. 
