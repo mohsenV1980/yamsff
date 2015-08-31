@@ -189,8 +189,8 @@ int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
 		struct rtentry **rt, u_int fibnum)
 { 		
-	struct ifaddr *ifa = ifa_ifwithaddr(rti_dst(rti));
 	struct mpls_aliasreq ifra;
+	struct ifaddr *ifa; 
 	struct ifnet *ifp;
 	int error, cmd;
 	
@@ -198,18 +198,19 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
+	bzero(&ifra, sizeof(ifra));
 /*
  * Fetch interface.
  */	
- 	
-	
+ 	ifa = ifa_ifwithaddr(rti_dst(rti));
+ 	ifp = (ifa != NULL) ? ifa->ifa_ifp : NULL; 
+ 		
 	if (rti_dst(rti)->sa_len > sizeof(ifra.ifra_x)) {
 		log(LOG_INFO, "%s: destination x in fec invalid\n", __func__);
 		error = EMSGSIZE;
 		goto out;
 	}
-	
-
+ 
 	if (rti_gateway(rti)->sa_family != AF_MPLS) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
 		error = EINVAL;
@@ -221,7 +222,6 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
-	bzero(&ifra, sizeof(ifra));
 	
 	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);
 	bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
@@ -252,7 +252,6 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EOPNOTSUPP;
 		goto out;
 	}
-	ifp = (ifa != NULL) ? ifa->ifa_ifp : NULL;  
 /*
  * Perform MPLS control operations on interface-layer.
  */	
