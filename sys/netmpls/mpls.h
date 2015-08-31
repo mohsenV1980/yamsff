@@ -291,7 +291,7 @@ struct mpls_aliasreq {
 	struct sockaddr_ftn 	ifra_seg; 	/* requested segment */
 	struct sockaddr_ftn 	ifra_x; 	/* destination x in fec */
 	int 	ifra_flags;
-	void 	*ifra_arg
+	void 	*ifra_arg;
 };
 
 #ifdef _KERNEL
@@ -302,11 +302,11 @@ struct mpls_aliasreq {
 struct mpls_ifaddr {
 	struct ifaddr 	mia_ifa;		/* protocol-independent info */
 #define mia_addr 	mia_ifa.ifa_addr
-#define mia_mask 	mia_ifa.ifa_mask
+#define mia_netmask 	mia_ifa.ifa_netmask
 #define mia_dstaddr 	mia_ifa.ifa_dstaddr
-#define mia_ifp 	mia_ifa.ifa_ifp;	
-#define mia_flags 	mia_ifa.ifa_flags;
-#define mia_metric 	mia_ifa.ifa_metric;
+#define mia_ifp 	mia_ifa.ifa_ifp	
+#define mia_flags 	mia_ifa.ifa_flags
+#define mia_metric 	mia_ifa.ifa_metric
 	TAILQ_ENTRY(mpls_ifaddr)	mia_link;
 	
 	struct sockaddr_ftn 	mia_seg; /* seg_i */
@@ -462,9 +462,9 @@ mpls_sftncopyin(struct sockaddr *sa0, struct sockaddr *sa1,
 		y = sa2->sa_data; 	/* destination */
 /*
  * Reinitialize.
- */	
+ */		
 		x1 = sa1->sa_data;
-		max0 = x1 + (sa1->sa_len - offsetof(struct sockaddr, sa_data);
+		max0 = x1 + (sa1->sa_len - offsetof(struct sockaddr, sa_data));
 /*
  * Finalize.
  */	
@@ -472,8 +472,6 @@ mpls_sftncopyin(struct sockaddr *sa0, struct sockaddr *sa1,
 			*y = *x1;
 	}
 } 
-
-
 
 /*
  * MPLS per-interface state.

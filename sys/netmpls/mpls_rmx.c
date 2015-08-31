@@ -174,7 +174,7 @@ int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *,
  *  o In rt_addrinfo{} spi contained flags encodes with MPLS 
  *    label binding linked operation.
  *   
- *    RTF_[POP|PUSH|SWAP] - self expanatory.
+ *    RTF_{POP|PUSH|SWAP} - self expanatory.
  *
  *    RTF_MPE, by fec generated nhlfe encodes with seg_j initial 
  *    label of Label Switch Path (lsp) in data plane.
