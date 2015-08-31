@@ -189,21 +189,46 @@ int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
 		struct rtentry **rt, u_int fibnum)
 { 		
+	struct ifaddr *ifa = ifa_ifwithaddr(rti_dst(rti));
 	struct mpls_aliasreq ifra;
-	int error, fmsk, omsk, cmd;
-	struct ifaddr *ifa;
 	struct ifnet *ifp;
+	int error, cmd;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
+/*
+ * Fetch interface.
+ */	
+ 	
+	
+	if (rti_dst(rti)->sa_len > sizeof(ifra.ifra_x)) {
+		log(LOG_INFO, "%s: destination x in fec invalid\n", __func__);
+		error = EMSGSIZE;
+		goto out;
+	}
+	
+
+	if (rti_gateway(rti)->sa_family != AF_MPLS) {
+		log(LOG_INFO, "%s: segment invalid\n", __func__);
+		error = EINVAL;
+		goto out;
+	}
+		
+	if (rti_gateway(rti)->sa_len > sizeof(ifra.ifra_seg)) {
+		log(LOG_INFO, "%s: segment invalid\n", __func__);
+		error = EMSGSIZE;
+		goto out;
+	}
 	bzero(&ifra, sizeof(ifra));
 	
-	ifa = NULL;
-	ifp = NULL;
+	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);
+	bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
+	
+	ifra.ifra_flags = rti_flags(rti);
 
-	switch ((int)rtm->rtm_type) {
+ 	switch ((int)rtm->rtm_type) {
 	case RTM_ADD:	
 /*
  * Apply MPLS label binding on Forward Equivalence Class (fec).
@@ -226,67 +251,11 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		log(LOG_INFO, "%s: command invalid\n", __func__);		
 		error = EOPNOTSUPP;
 		goto out;
-	} 
-	omsk = RTF_MPLS_OMASK;
-	fmsk = RTF_MPLS;
-/*
- * Determine, if MPLS label binding is possible.
- */	
-	if ((fmsk = (rti_flags(rti) & fmsk)) == 0)  {
-		log(LOG_INFO, "%s: requested route not "
-			"in AF_MPLS domain", __func__);
-		error = EINVAL;
-		goto out;
 	}
-	fmsk |= (rti_flags(rti) & RTF_GATEWAY) ? RTF_GATEWAY : RTF_LLDATA;
-	
-	if ((fmsk = (rti_flags(rti) & fmsk)) == 0)  {
-		log(LOG_INFO, "%s: flags invalid\n", __func__);
-		error = EINVAL;
-		goto out;
-	}
-	fmsk |= (rti_flags(rti) & omsk);
-
-	switch (fmsk & omsk) {
-	case RTF_POP:
-	case RTF_PUSH: 	/* FALLTRHOUGH */
-	case RTF_SWAP:
-		break;
-	default:	
-		log(LOG_INFO, "%s: opcode invalid\n", __func__);		
-		error = EINVAL;
-		goto out;
-	}
-	fmsk |= (rti_flags(rti) & RTF_STK) ? RTF_STK : RTF_MPE;	
-	ifra.ifra_flags = (rti_flags(rti) & fmsk);
-
-	if (rti_gateway(rti)->sa_family != AF_MPLS) {
-		log(LOG_INFO, "%s: segment invalid\n", __func__);
-		error = EINVAL;
-		goto out;
-	}
-		
-	if (rti_gateway(rti)->sa_len > sizeof(ifra.ifra_seg)) {
-		log(LOG_INFO, "%s: segment invalid\n", __func__);
-		error = EMSGSIZE;
-		goto out;
-	}
-	bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
-	
-	if (rti_dst(rti)->sa_len > sizeof(ifra.ifra_x)) {
-		log(LOG_INFO, "%s: destination x in fec invalid\n", __func__);
-		error = EMSGSIZE;
-		goto out;
-	}
-	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);		
-/*
- * Fetch interface.
- */	
- 	ifa = ifa_ifwithaddr((struct sockaddr *)&ifra.ifra_x);
-	ifp = (ifa != NULL) ? ifa->ifa_ifp : ifp;	  
+	ifp = (ifa != NULL) ? ifa->ifa_ifp : NULL;  
 /*
  * Perform MPLS control operations on interface-layer.
- */
+ */	
  	error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
 	
 	if (cmd  == SIOCGIFADDR) {

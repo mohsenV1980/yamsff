@@ -439,6 +439,148 @@ done:
 }
 
 /*
+ * Implements temporary queue, holds set containing 
+ * nhlfe maps to fec during mpls_link_rtrequest.
+ */
+struct mpls_ifaddrbuf {
+	TAILQ_ENTRY(mpls_ifaddrbuf)	ib_chain;
+	struct ifaddr	*ib_nhlfe;
+};
+TAILQ_HEAD(mpls_ifaddrbuf_hd, mpls_ifaddrbuf);
+
+/*
+ * Purge ftn maps to fec, when fec invalidates. 
+ *
+ * XXX: incomplete...
+ */
+void
+mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
+{
+	struct mpls_ifaddrbuf_hd hd;
+	
+	struct ifnet *ifp;
+	struct ifaddr *ifa;
+	
+	struct mpls_ifaddrbuf *ib;
+
+#ifdef MPLS_DEBUG
+	(void)printf("%s\n", __func__);
+#endif /* MPLS_DEBUG */
+
+	RT_LOCK_ASSERT(fec);
+	TAILQ_INIT(&hd);
+	ifp = fec->rt_ifp;
+
+	switch (cmd) {
+	case RTM_ADD:
+		break;
+	case RTM_CHANGE:	
+	case RTM_DELETE:
+/*
+ * Build subset.
+ */			
+		IF_ADDR_RLOCK(ifp);
+		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
+		
+			if ((ifa->ifa_flags & IFA_NHLFE) == 0)
+				continue;
+				
+			if (mpls_sa_equal(rt_key(fec), 
+				(struct sockaddr *)&mpls_x(ifa)) == 0)
+				continue;
+	
+			ifa_ref(ifa);
+/*
+ * Can't fail.
+ */			
+			ib = malloc(sizeof(*ib), M_TEMP, M_WAITOK|M_ZERO);
+			ib->ib_nhlfe = ifa;	
+			
+			TAILQ_INSERT_TAIL(&hd, ib, ib_chain);
+		}
+		IF_ADDR_RUNLOCK(ifp);	
+/*
+ * Purge collection.
+ */
+		while (!TAILQ_EMPTY(&hd)) {
+			ib = TAILQ_FIRST(&hd);
+			
+			mpls_purgeaddr(ib->ib_nhlfe);     	 	
+			
+			TAILQ_REMOVE(&hd, ib, ib_chain);
+			
+			ifa_free(ib->ib_nhlfe);
+			ib->ib_nhlfe = NULL;
+			
+			free(ib, M_TEMP);
+		}
+	    break;
+	default:
+		break;
+	}			
+	fec->rt_mtu = ifp->if_mtu;
+}
+
+/*
+ * Purge x-connect.
+ */
+void	
+mpls_purgeaddr(struct ifaddr *ifa)
+{	
+	struct mpls_ifaddr *mia;
+	struct ifnet *ifp;
+	struct ifaddr *oifa;
+	struct rtentry *fec;
+	
+#ifdef MPLS_DEBUG
+	(void)printf("%s\n", __func__);
+#endif /* MPLS_DEBUG */
+
+	oifa = NULL;
+	fec = NULL;
+	
+	KASSERT((ifa != NULL), ("Invalid argument"));
+	
+	if ((ifa->ifa_flags & IFA_NHLFE) == 0)
+		goto out;
+		
+	mia = ifatomia(ifa);
+	ifp = mia->mia_ifp;
+	
+	ifa_ref(mia->mia_x);
+	oifa = mia->mia_x;
+	
+	KASSERT((ifp != NULL), ("Can't assign requested address"));
+	KASSERT((oifa != NULL), ("Can't assign requested address"));
+	
+	fec = rtalloc1_fib(oifa->ifa_addr, 0, 0UL, 0);
+	if ((fec == NULL) 		
+		|| (fec->rt_gateway == NULL) 
+		|| (fec->rt_ifp == NULL)
+		|| (fec->rt_ifa == NULL) 
+		|| ((fec->rt_flags & RTF_UP) == 0))
+		goto out;
+	
+	if (mpls_ifscrub(ifp, mia, fec) != 0)
+		goto out;
+/*
+ * Dequeue nhlfe.
+ */	
+	NHLFE_WLOCK();
+	TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
+	NHLFE_WUNLOCK();
+	
+	ifa_free(&mia->mia_ifa);
+out:	
+	if (fec != NULL) 
+		RTFREE_LOCKED(fec);
+
+	if (oifa != NULL)
+		ifa_free(oifa);
+}
+
+
+/*
  * Generic mpls control operations.
  *
  * XXX: under construction... 
@@ -450,22 +592,17 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 {
 	struct mpls_aliasreq *ifra = (struct mpls_aliasreq *)data;
 	struct ifreq *ifr = (struct ifreq *)data;
-	struct sockaddr *seg, *x;
-	int error, priv, flags;
-	struct rtentry *fec;
-	struct ifaddr *ifa, *oifa;	
+	struct rtentry *fec = NULL;
+	struct ifaddr *oifa = NULL;
+	struct ifaddr *ifa = NULL;	
+	int error = 0, priv = 0, flags;
 	struct mpls_ifaddr *mia;
+	struct sockaddr *seg, *x;
 	
+
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
-
-	priv = 0;
-	error = 0;
-	fec = NULL;
-	ifa = NULL;	
-	oifa = NULL;
-	mia = NULL;
 
 	if (ifp == NULL) {
 		error = EADDRNOTAVAIL;
@@ -753,9 +890,10 @@ out:
 static int  
 mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 {
+	struct ifaddr *ifa = miatoifa(mia);
 	struct sockaddr_ftn sftn;
 	struct sockaddr *seg;
-	struct ifaddr *ifa;
+	
 	int error;
 	
 #ifdef MPLS_DEBUG
@@ -764,13 +902,14 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	
 	bzero(&sftn, sizeof(sftn));
 	seg = (struct sockaddr *)&sftn; 
-	ifa = miatoifa(mia);
+	
 	error = 0;
 	
 	if (rt != NULL) {
 		if (rt->rt_flags & RTF_STK) 
 			rt->rt_flags &= ~RTF_STK;
 		else if (mia->mia_rt_flags & RTF_PUSH) {
+			
 /*
  * XXX; ugly... but I'll reimplement this code-section...
  */			
@@ -809,11 +948,10 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 		IF_AFDATA_WUNLOCK(ifp);
 		ifa_free(&mia->mia_ifa);	
 	}
+	bzero(seg, sizeof(sftn));	
 /*
  * Remove corrosponding llentry{}.
  */		
-	bzero(seg, sizeof(sftn));	
-
  	seg->sa_len = SMPLS_LEN;
 	seg->sa_family = AF_MPLS;
  	
@@ -867,20 +1005,48 @@ static int
 mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt, 
 		struct sockaddr *sa, int flags)
 {
+	struct ifaddr *oifa = NULL;
+	struct ifaddr *ifa = NULL;
+	int omsk = RTF_MPLS_OMASK;
+	int fmsk = RTF_MPLS; 
 	struct sockaddr_ftn sftn;
 	struct sockaddr *nh;
-	struct ifaddr *oifa;
-	struct ifaddr *ifa;
 	int error;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
-	bzero(&sftn, sizeof(sftn));
+/*
+ * Determine, if MPLS label binding is possible.
+ */	
+	if ((fmsk = (flags & fmsk)) == 0)  {
+		error = EINVAL;
+		goto out;
+	}
+	fmsk |= (flags & RTF_GATEWAY) ? RTF_GATEWAY : RTF_LLDATA;
+	
+	if ((fmsk = (flags & fmsk)) == 0)  {
+		error = EINVAL;
+		goto out;
+	}
+	fmsk |= (flags & omsk);
+
+	switch (fmsk & omsk) {
+	case RTF_POP:
+	case RTF_PUSH: 	/* FALLTRHOUGH */
+	case RTF_SWAP:
+		break;
+	default:			
+		error = EINVAL;
+		goto out;
+	}
+	fmsk |= (flags & RTF_STK) ? RTF_STK : RTF_MPE;	
+	flags = (flags & fmsk);	
 /*
  * Prepare storage for gateway address and < op, seg_out, rd >.	
  */
+	bzero(&sftn, sizeof(sftn));
 	sftn.sftn_len = sizeof(sftn);
 	sftn.sftn_op = flags & RTF_MPLS_OMASK;
 	
@@ -981,147 +1147,6 @@ out:
 		ifa_free(oifa);
 
 	return (error);
-}
-
-/*
- * Implements temporary queue, holds set containing 
- * nhlfe maps to fec during mpls_link_rtrequest.
- */
-struct mpls_ifaddrbuf {
-	TAILQ_ENTRY(mpls_ifaddrbuf)	ib_chain;
-	struct ifaddr	*ib_nhlfe;
-};
-TAILQ_HEAD(mpls_ifaddrbuf_hd, mpls_ifaddrbuf);
-
-/*
- * Purge ftn maps to fec, when fec invalidates. 
- *
- * XXX: incomplete...
- */
-void
-mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
-{
-	struct mpls_ifaddrbuf_hd hd;
-	
-	struct ifnet *ifp;
-	struct ifaddr *ifa;
-	
-	struct mpls_ifaddrbuf *ib;
-
-#ifdef MPLS_DEBUG
-	(void)printf("%s\n", __func__);
-#endif /* MPLS_DEBUG */
-
-	RT_LOCK_ASSERT(fec);
-	TAILQ_INIT(&hd);
-	ifp = fec->rt_ifp;
-
-	switch (cmd) {
-	case RTM_ADD:
-		break;
-	case RTM_CHANGE:	
-	case RTM_DELETE:
-/*
- * Build subset.
- */			
-		IF_ADDR_RLOCK(ifp);
-		TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
-		
-			if ((ifa->ifa_flags & IFA_NHLFE) == 0)
-				continue;
-				
-			if (mpls_sa_equal(rt_key(fec), 
-				(struct sockaddr *)&mpls_x(ifa)) == 0)
-				continue;
-	
-			ifa_ref(ifa);
-/*
- * Can't fail.
- */			
-			ib = malloc(sizeof(*ib), M_TEMP, M_WAITOK|M_ZERO);
-			ib->ib_nhlfe = ifa;	
-			
-			TAILQ_INSERT_TAIL(&hd, ib, ib_chain);
-		}
-		IF_ADDR_RUNLOCK(ifp);	
-/*
- * Purge collection.
- */
-		while (!TAILQ_EMPTY(&hd)) {
-			ib = TAILQ_FIRST(&hd);
-			
-			mpls_purgeaddr(ib->ib_nhlfe);     	 	
-			
-			TAILQ_REMOVE(&hd, ib, ib_chain);
-			
-			ifa_free(ib->ib_nhlfe);
-			ib->ib_nhlfe = NULL;
-			
-			free(ib, M_TEMP);
-		}
-	    break;
-	default:
-		break;
-	}			
-	fec->rt_mtu = ifp->if_mtu;
-}
-
-/*
- * Purge x-connect.
- */
-void	
-mpls_purgeaddr(struct ifaddr *ifa)
-{	
-	struct mpls_ifaddr *mia;
-	struct ifnet *ifp;
-	struct ifaddr *oifa;
-	struct rtentry *fec;
-	
-#ifdef MPLS_DEBUG
-	(void)printf("%s\n", __func__);
-#endif /* MPLS_DEBUG */
-
-	oifa = NULL;
-	fec = NULL;
-	
-	KASSERT((ifa != NULL), ("Invalid argument"));
-	
-	if ((ifa->ifa_flags & IFA_NHLFE) == 0)
-		goto out;
-		
-	mia = ifatomia(ifa);
-	ifp = mia->mia_ifp;
-	
-	ifa_ref(mia->mia_x);
-	oifa = mia->mia_x;
-	
-	KASSERT((ifp != NULL), ("Can't assign requested address"));
-	KASSERT((oifa != NULL), ("Can't assign requested address"));
-	
-	fec = rtalloc1_fib(oifa->ifa_addr, 0, 0UL, 0);
-	if ((fec == NULL) 		
-		|| (fec->rt_gateway == NULL) 
-		|| (fec->rt_ifp == NULL)
-		|| (fec->rt_ifa == NULL) 
-		|| ((fec->rt_flags & RTF_UP) == 0))
-		goto out;
-	
-	if (mpls_ifscrub(ifp, mia, fec) != 0)
-		goto out;
-/*
- * Dequeue nhlfe.
- */	
-	NHLFE_WLOCK();
-	TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
-	NHLFE_WUNLOCK();
-	
-	ifa_free(&mia->mia_ifa);
-out:	
-	if (fec != NULL) 
-		RTFREE_LOCKED(fec);
-
-	if (oifa != NULL)
-		ifa_free(oifa);
 }
 
 /*
