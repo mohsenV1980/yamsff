@@ -171,7 +171,7 @@ void	(*mpls_dn_p)(struct mbuf *, struct ifnet *);
 /*
  * Defines set containing nhlfe. 
  */
-struct mpls_head mpls_iflist;
+struct mpls_head mpls_ifaddrhead;
 struct rwlock mpls_lock;
 
 RW_SYSINIT(mpls_lock, &mpls_lock, "mpls_lock");
@@ -192,7 +192,7 @@ static struct netisr_handler mpls_nh = {
 void
 mpls_init(void)
 {
-	TAILQ_INIT(&mpls_iflist);
+	TAILQ_INIT(&mpls_ifaddrhead);
 	EVENTHANDLER_REGISTER(mpls_bridge_event, mpls_bridge_if, 
 		NULL, EVENTHANDLER_PRI_ANY);
 	mpls_dn_p = mpls_dummynet;

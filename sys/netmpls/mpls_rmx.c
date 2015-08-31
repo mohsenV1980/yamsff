@@ -280,12 +280,14 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	}
 	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);		
 /*
+ * Fetch interface.
+ */	
+ 	ifa = ifa_ifwithaddr((struct sockaddr *)&ifra.ifra_x);
+	ifp = (ifa != NULL) ? ifa->ifa_ifp : ifp;	  
+/*
  * Perform MPLS control operations on interface-layer.
  */
- 	ifa = ifa_ifwithaddr(rti_dst(rti));
-	ifp = (ifa != NULL) ? ifa->ifa_ifp : ifp;	 
-	 
-	error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
+ 	error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
 	
 	if (cmd  == SIOCGIFADDR) {
 /*
