@@ -994,6 +994,9 @@ mpls_purgeaddr(struct ifaddr *ifa)
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
+	oifa = NULL;
+	fec = NULL;
+	
 	KASSERT((ifa != NULL), ("Invalid argument"));
 	
 	if ((ifa->ifa_flags & IFA_NHLFE) == 0)
@@ -1024,6 +1027,8 @@ mpls_purgeaddr(struct ifaddr *ifa)
 	NHLFE_WLOCK();
 	TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
 	NHLFE_WUNLOCK();
+	
+	ifa_free(&mia->mia_ifa);
 out:	
 	if (fec != NULL) 
 		RTFREE_LOCKED(fec);
