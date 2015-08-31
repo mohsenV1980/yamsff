@@ -387,9 +387,11 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  		if (priv != PRIV_NET_ADDIFADDR)
 			priv = PRIV_NET_DELIFADDR;
  		
- 		error = priv_check(td, priv);
-		if (error != 0) 
-			goto out;					
+ 		if (td != NULL) {
+ 			error = priv_check(td, priv);
+			if (error != 0) 
+				goto out;					
+		}
 	}	
 	
 	switch (cmd) {

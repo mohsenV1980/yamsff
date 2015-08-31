@@ -54,6 +54,9 @@
 #include <netinet/ip.h>
 #include <netmpls/mpls.h>
 
+extern int	mpls_control(struct socket *, u_long, caddr_t, struct ifnet *,
+    struct thread *);
+
 /*
  * Radix-trie containing (free) generated ilm.
  */
@@ -186,14 +189,19 @@ int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
 		struct rtentry **rt, u_int fibnum)
 { 		
-	struct mpls_ailiasreq ifra;
-	int error, fmsk, omask, cmd;
+	struct mpls_aliasreq ifra;
+	int error, fmsk, omsk, cmd;
+	struct ifaddr *ifa;
+	struct ifnet *ifp;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
 	bzero(&ifra, sizeof(ifra));
+	
+	ifa = NULL;
+	ifp = NULL;
 
 	switch ((int)rtm->rtm_type) {
 	case RTM_ADD:	
@@ -208,7 +216,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  */
 		cmd = SIOCDIFADDR;
 		break;
-	case RTM_GET:  	
+	case RTM_GET:
 /*
  * Fetch Incoming Label Map (ilm) by MPLS label binding on fec.
  */	
@@ -270,22 +278,29 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
-	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);	  	
+	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);		
 /*
  * Perform MPLS control operations on interface-layer.
  */
-	error = mpls_control(NULL, cmd, (void *)&ifra, NULL, NULL);
+ 	ifa = ifa_ifwithaddr(rti_dst(rti));
+	ifp = (ifa != NULL) ? ifa->ifa_ifp : ifp;	 
+	 
+	error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
 	
 	if (cmd  == SIOCGIFADDR) {
 /*
  * Fetch ilm, if fec does not denote ingress route by lsp_in.
  */		
 		if ((ifra.ifra_flags & RTF_MPE) == 0) 
-			*rt = rtalloc1_fib(seg, 0, 0UL, fibnum);	
+			*rt = rtalloc1_fib((struct sockaddr *)&ifra.ifra_seg, 
+				0, 0UL, 0);	
 		
 		error = (*rt == NULL) ? EADDRNOTAVAIL : error;	
 	}
 out:	
+	if (ifa != NULL)
+		ifa_free(ifa);
+	
 	return (error);
 }
 #undef rti_dst

@@ -175,7 +175,7 @@ sysctl_mpls_arp(SYSCTL_HANDLER_ARGS)
 	if (enable != mpls_arp) {
 		
 		NHLFE_WLOCK();
-		TAILQ_FOREACH(nhlfe, &mpls_iflist, mia_link) {
+		TAILQ_FOREACH(nhlfe, &mpls_ifaddrhead, mia_link) {
 			nhlfe->mia_lle = NULL;
 		}		
 		NHLFE_WUNLOCK();	
