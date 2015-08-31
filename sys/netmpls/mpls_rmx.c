@@ -201,15 +201,14 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	bzero(&ifra, sizeof(ifra));
 /*
  * Fetch interface.
- */	
- 	ifa = ifa_ifwithaddr(rti_dst(rti));
- 	ifp = (ifa != NULL) ? ifa->ifa_ifp : NULL; 
- 		
+ */		
 	if (rti_dst(rti)->sa_len > sizeof(ifra.ifra_x)) {
 		log(LOG_INFO, "%s: destination x in fec invalid\n", __func__);
 		error = EMSGSIZE;
 		goto out;
 	}
+	ifa = ifa_ifwithaddr(rti_dst(rti));
+ 	ifp = (ifa != NULL) ? ifa->ifa_ifp : NULL; 
  
 	if (rti_gateway(rti)->sa_family != AF_MPLS) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
