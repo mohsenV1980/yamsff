@@ -840,7 +840,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * Append nhlfe on lla.
  */	
 	ifa_ref(&mia->mia_ifa);
-	ifa = miatoifa(mia)
+	ifa = miatoifa(mia);
 	
 	IF_ADDR_WLOCK(ifp);
 	TAILQ_INSERT_AFTER(&ifp->if_addrhead, ifp->if_addr, ifa, ifa_link);
