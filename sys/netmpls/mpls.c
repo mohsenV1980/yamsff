@@ -575,7 +575,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 					M_ZERO|M_NOWAIT);
 		
 			if (mia != NULL) {			
-				ifa = &mia->mia_ifa;
+				ifa = miatoifa(mia);
 				ifa_init(ifa);				
 			} else	
 				error = ENOBUFS;
@@ -603,7 +603,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 /*
  * Enqueue and append nhlfe at link-level address on interface.
  */	
-		ifa_ref(ifa);
+		ifa_ref(&mia->mia_ifa);
 
 		NHLFE_WLOCK();
 		TAILQ_INSERT_TAIL(&mpls_ifaddrhead, mia, mia_link);	
@@ -632,7 +632,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
 		NHLFE_WUNLOCK();
 	
-		ifa_free(ifa);
+		ifa_free(&mia->mia_ifa);
 		break;
 	case SIOCGIFADDR:
 		
@@ -655,7 +655,7 @@ out:
 		ifa_free(oifa);
 
 	if (ifa != NULL)
-		ifa_free(ifa);			
+		ifa_free(&mia->mia_ifa);			
 
 	return (error);	
 }
@@ -677,7 +677,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	
 	bzero(&sftn, sizeof(sftn));
 	seg = (struct sockaddr *)&sftn; 
-	ifa = &mia->mia_ifa;
+	ifa = miatoifa(mia);
 	error = 0;
 	
 	if (rt != NULL) {
@@ -720,7 +720,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 			ifp->if_flags &= ~IFF_MPE;			
 		}
 		IF_AFDATA_WUNLOCK(ifp);
-		ifa_free(ifa);	
+		ifa_free(&mia->mia_ifa);	
 	}
 /*
  * Remove corrosponding llentry{}.
@@ -766,7 +766,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
 	IF_ADDR_WUNLOCK(ifp);
 	
-	ifa_free(ifa);
+	ifa_free(&mia->mia_ifa);
 	
 	ifa->ifa_flags &= ~IFA_ROUTE;
 out:
@@ -840,7 +840,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * Append nhlfe on lla.
  */	
 	ifa_ref(&mia->mia_ifa);
-	ifa = &mia->mia_ifa;
+	ifa = miatoifa(mia)
 	
 	IF_ADDR_WLOCK(ifp);
 	TAILQ_INSERT_AFTER(&ifp->if_addrhead, ifp->if_addr, ifa, ifa_link);
@@ -862,7 +862,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 		ifp->if_flags |= IFF_MPE;	
 		IF_AFDATA_WUNLOCK(ifp);	
 			
-		ifa_ref(ifa);	
+		ifa_ref(&mia->mia_ifa);	
 	} else {			
 		if (flags & RTF_STK) 
 			rt->rt_flags |= RTF_STK;
@@ -1009,7 +1009,7 @@ mpls_purgeaddr(struct ifaddr *ifa)
 	KASSERT((oifa != NULL), ("Can't assign requested address"));
 	
 	fec = rtalloc1_fib(oifa->ifa_addr, 0, 0UL, 0);
-	if (fec == NULL) 		
+	if ((fec == NULL) 		
 		|| (fec->rt_gateway == NULL) 
 		|| (fec->rt_ifp == NULL)
 		|| (fec->rt_ifa == NULL) 
