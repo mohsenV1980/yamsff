@@ -13,7 +13,8 @@ Ongoing operational tasks:
  o Starting of tasks for IPv6 integration.
  o Manual pages and misc. documentation.
  o Fixes targeting my bad orthography.
- o Transition from 10.1 to 10.2. 
+ o Transition integraiton from 10.1 to 10.2. 
+ o Establishing full rfc-3031 and rfc-3032 conformancy.
 
 Additional information about contacting
 ---------------------------------------
@@ -62,8 +63,8 @@ NOTE:
 NOTE: Purpose of this operation is to teach myself about MPLS for a better 
 NOTE: understanding.   
 NOTE: 
-NOTE: Please contact me (see above) and help me, if I've applied copyright 
-NOTE: notices linked with my name on files in this repository in a wrong way. 
+NOTE: Please contact me (see above) and help me, if I have applied copyright 
+NOTE: notices (linked with my name) on files in this repository in a wrong way. 
 NOTE:
 NOTE: I am inexperienced and I will avoid any trouble about licensing issues.   
 NOTE:        
@@ -310,8 +311,7 @@ Necessary precondition is a workstation running at least FreeBSD 10.1-RELEASE.
  
      (a) cd /usr/src
  
-     (b) git clone https://github.com/hmatyschok/yamms .
-    
+     (b) git clone https://github.com/hmatyschok/yamms .  
  
  3. Install source code distribution shipped with installation media, i. e. 
     stored as image file in /tmp. 
@@ -327,6 +327,12 @@ Necessary precondition is a workstation running at least FreeBSD 10.1-RELEASE.
      (e) umount /mnt
     
      (f) mdconfig -d -u 0
+ 
+How to Compile?
+---------------
+               
+               
+               
                   
            ... to be continued.                 
                              

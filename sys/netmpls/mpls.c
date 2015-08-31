@@ -81,16 +81,6 @@
 #include <netinet/ip6.h>
 #endif /* INET6 */
 
-/*
- * Implements temporary queue, holds set containing 
- * nhlfe maps to fec during mpls_link_rtrequest.
- */
-struct mpls_ifaddrbuf {
-	TAILQ_ENTRY(mpls_ifaddrbuf)	ib_chain;
-	struct ifaddr	*ib_nhlfe;
-};
-TAILQ_HEAD(mpls_ifaddrbuf_hd, mpls_ifaddrbuf);
-
 static int 	mpls_ifinit(struct ifnet *, struct mpls_ifaddr *, 
 	struct rtentry *, struct sockaddr *, int);
 static int 	mpls_ifscrub(struct ifnet *, struct mpls_ifaddr *, 
@@ -117,7 +107,7 @@ int 	mpls_control(struct socket *, u_long, caddr_t,
 	struct ifnet *, struct thread *);
 
 /*
- * Locate nhlfe by its key (seg_in).
+ * Locate Next Hop Label Forwarding Entry (nhlfe) by its key (seg_in).
  */
 
 struct ifaddr *
@@ -448,6 +438,16 @@ done:
 }
 
 /*
+ * Implements temporary queue, holds set containing 
+ * nhlfe maps to fec during mpls_link_rtrequest.
+ */
+struct mpls_ifaddrbuf {
+	TAILQ_ENTRY(mpls_ifaddrbuf)	ib_chain;
+	struct ifaddr	*ib_nhlfe;
+};
+TAILQ_HEAD(mpls_ifaddrbuf_hd, mpls_ifaddrbuf);
+
+/*
  * Purge ftn maps to fec, when fec invalidates. 
  *
  * XXX: incomplete...
@@ -456,12 +456,11 @@ void
 mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 {
 	struct mpls_ifaddrbuf_hd hd;
+	struct mpls_ifaddrbuf *ib;
 	
 	struct ifnet *ifp;
 	struct ifaddr *ifa;
 	
-	struct mpls_ifaddrbuf *ib;
-
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
@@ -578,7 +577,6 @@ out:
 		ifa_free(oifa);
 }
 
-
 /*
  * Generic mpls control operations.
  *
@@ -596,7 +594,6 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	int error = 0, priv = 0, flags;
 	struct mpls_ifaddr *mia;
 	struct sockaddr *seg, *x;
-	
 
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
