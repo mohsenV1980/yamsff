@@ -655,7 +655,7 @@ out:
 		ifa_free(oifa);
 
 	if (ifa != NULL)
-		ifa_free(&mia->mia_ifa);			
+		ifa_free(ifa);			
 
 	return (error);	
 }
