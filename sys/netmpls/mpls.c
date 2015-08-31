@@ -91,14 +91,15 @@ struct ifaddr * 	mpls_ifaof_ifpforxconnect(struct sockaddr *,
 struct ifaddr * 	mpls_ifawithxconnect_fib(struct sockaddr *, 
 	struct sockaddr *, u_int, int);
 
-static void 	mpls_link_rtrequest(int, struct rtentry *, 
-	struct rt_addrinfo *);
+
 static int 	mpls_ifinit(struct ifnet *, struct mpls_ifaddr *, 
 	struct rtentry *, struct sockaddr *, int);
 static int 	mpls_ifscrub(struct ifnet *, struct mpls_ifaddr *, 
 	struct rtentry *);	
 
 void 	mpls_purgeaddr(struct ifaddr *);
+void 	mpls_link_rtrequest(int, struct rtentry *, 
+	struct rt_addrinfo *);
 int 	mpls_control(struct socket *, u_long, caddr_t, 
 	struct ifnet *, struct thread *);
 
@@ -371,6 +372,22 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	oifa = NULL;
 	mia = NULL;
 
+	if (ifp == NULL) {
+		error = EADDRNOTAVAIL;
+		goto out;
+	}
+	
+	if ((ifp->if_ioctl == NULL) 
+		|| (ifp->if_addr == NULL)) { 
+		error = ENXIO;
+		goto out;
+	}
+
+	if ((ifp->if_flags & IFF_MPLS) == 0) {
+		error = EADDRNOTAVAIL;
+ 		goto out;			
+ 	}
+
 	switch (cmd) {
 	case SIOCAIFADDR:
 	case SIOCSIFADDR:
@@ -419,10 +436,6 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 /*
  * Per-interface MPLS label space.
  */		
-			if (ifp == NULL) {
-				error = EADDRNOTAVAIL;
-				goto out;
-			}
 			ifa_ref(ifp->if_addr);
 			oifa = ifp->if_addr;
 			x = oifa->ifa_addr;
@@ -430,15 +443,11 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
 		} else
 			flags = ifra->ifra_flags;
+ 		
  		break;
  	case SIOCGIFADDR:
  	case SIOCSIFADDR: 	/* FALLTHROUGH */
  	
- 		if (ifp == NULL) {
-			error = EADDRNOTAVAIL;
-			goto out;
-		}
- 		
  		if (ifr == NULL) {
 			error = EINVAL;
 			goto out;
@@ -461,8 +470,21 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	}
  	
 	switch (cmd) {
+	case SIOCSIFADDR: 
+/*
+ * MPLS label binding scoping per-interface label space.
+ *
+ * RTF_MPE, by fec generated nhlfe encodes with seg_j initial 
+ * label of Label Switch Path (lsp) in data plane.
+ *
+ * RTF_LLDATA, nhlfe is linked to an interface in link-layer 
+ * where targeted interface represents fec by nhlfe itself. 
+ */	
+		flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
+				
 	case SIOCAIFADDR:	
-	case SIOCDIFADDR:	/* FALLTHROUGH */
+	case SIOCDIFADDR:	 	/* FALLTHROUGH */		
+	case SIOCGIFADDR:
 /*
  * Determine, if Forward Equivalence Class (fec) still exists 
  * as precondition for MPLS label binding on MPLS label space 
@@ -475,14 +497,9 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 /*
  * Per-interface MPLS label space.
  */
- 			oifa = (oifa == NULL) ? ifa_ifwithaddr(x) : oifa;
- 			
- 			if (oifa == NULL) {	
- 				error = EADDRNOTAVAIL;
- 				goto out;
- 			}
- 			ifp = (ifp == NULL) ? oifa->ifa_ifp : ifp;
- 					
+ 			if (oifa->ifa_ifp != ifp) 
+				error = ESRCH;	
+				
 		} else if (((fec = rtalloc1_fib(x, 0, 0UL, 0)) != NULL) 		
 			&& (fec->rt_gateway != NULL) 
 			&& (fec->rt_ifp != NULL)
@@ -491,15 +508,13 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 /*
  * MPLS label space scoped by set containing fec.
  */
-			ifp = (ifp == NULL) ? fec->rt_ifp : ifp;
-		} else {
-			error = ESRCH;	
+			if (fec->rt_ifp != ifp) 
+				error = ESRCH;
+		} else 
+			error = ESRCH;
+		
+		if (error != 0) 
 			goto out;
-		}
- 						/* FALLTHROUGH */
- 						
- 	case SIOCGIFADDR:
- 	case SIOCSIFADDR: 	
 /*
  * Fetch Next Hop Label Forwarding Entry (nhlfe).
  */ 
@@ -530,44 +545,12 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			}
 			NHLFE_RUNLOCK();
 		} 	
-		break;
-	default:
-		break;	
-	}	
-	
-	if (ifp == NULL) {
-		error = EADDRNOTAVAIL;
-		goto out;
 	}
-	
-	if ((ifp->if_ioctl == NULL) 
-		|| (ifp->if_addr == NULL)) { 
-		error = ENXIO;
-		goto out;
-	}
-
-	if ((ifp->if_flags & IFF_MPLS) == 0) {
-		error = EADDRNOTAVAIL;
- 		goto out;			
- 	}
 	
 	switch (cmd) {
-	case SIOCSIFADDR: 
-/*
- * MPLS label binding scoping per-interface label space.
- *
- * RTF_MPE, by fec generated nhlfe encodes with seg_j initial 
- * label of Label Switch Path (lsp) in data plane.
- *
- * RTF_LLDATA, nhlfe is linked to an interface in link-layer 
- * where targeted interface represents fec by nhlfe itself. 
- */	
-		flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
-			
-	case SIOCAIFADDR: 	
+	case SIOCAIFADDR:	
+	case SIOCSIFADDR:	/* FALLTHROUGH */	
 	
- 		              /* FALLTHROUGH */  
- 		
  		if (ifa == NULL) { 
 /*
  * Allocate, if possible.
