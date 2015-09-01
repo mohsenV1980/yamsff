@@ -658,7 +658,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		}
 		seg = (struct sockaddr *)&ifra->ifra_seg;	
 		x = (struct sockaddr *)&ifra->ifra_x;	
-		
+	
 		if (x->sa_family == AF_UNSPEC) {
 /*
  * Per-interface MPLS label space.
@@ -666,7 +666,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			ifa_ref(ifp->if_addr);
 			oifa = ifp->if_addr;
 			x = oifa->ifa_addr;
-			
+
 			flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
 		} else
 			flags = ifra->ifra_flags;
@@ -690,7 +690,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			goto out;
 		}
 		seg = &ifr->ifr_addr;
-	
+
 		ifa_ref(ifp->if_addr);
 		oifa = ifp->if_addr;
 		x = oifa->ifa_addr;
@@ -723,13 +723,10 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 /*
  * Per-interface MPLS label space.
  */
-			oifa = (oifa == NULL) ? ifa_ifwithaddr(x) : oifa;
-			
-			if (oifa == NULL)
-				error = ESRCH;
-			else if (oifa->ifa_ifp != ifp) 
-				error = ESRCH;	
-				
+			if (oifa == NULL) {
+				ifa_ref(ifp->if_addr);
+				oifa = ifp->if_addr;
+			}	
 		} else if (((fec = rtalloc1_fib(x, 0, 0UL, 0)) != NULL) 		
 			&& (fec->rt_gateway != NULL) 
 			&& (fec->rt_ifp != NULL)
@@ -739,16 +736,15 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  * MPLS label space scoped by set containing fec.
  */
 			if (fec->rt_ifp != ifp) 
-				error = ESRCH;
+				error = ESRCH;	
 		} else 
 			error = ESRCH;
 		
-		if (error != 0) 
+		if (error != 0) 	
 			goto out;
-			
+	
 							/* FALLTHROUGH */
 	case SIOCGIFADDR:
-
 /*
  * Fetch Next Hop Label Forwarding Entry (nhlfe).
  */ 
@@ -774,8 +770,8 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			}
 		
 			if (mia != NULL) {
-				ifa_ref(&mia->mia_ifa);
-				ifa = &mia->mia_ifa;
+				ifa = miatoifa(ifa);
+				ifa_ref(ifa);
 			}
 			NHLFE_RUNLOCK();
 		} 	
@@ -794,7 +790,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 					M_ZERO|M_NOWAIT);
 		
 			if (mia != NULL) {			
-				ifa = miatoifa(mia);
+				ifa = &mia->mia_ifa;
 				ifa_init(ifa);				
 			} else	
 				error = ENOBUFS;
@@ -822,7 +818,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 /*
  * Enqueue and append nhlfe at link-level address on interface.
  */	
-		ifa_ref(&mia->mia_ifa);
+		ifa_ref(ifa);
 
 		NHLFE_WLOCK();
 		TAILQ_INSERT_TAIL(&mpls_ifaddrhead, mia, mia_link);	
@@ -842,8 +838,8 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  		}
  		
  		error = mpls_ifscrub(ifp, mia, fec);
- 		if (error != 0) 
- 			break;
+		if (error != 0) 
+			break;
 /*
  * Dequeue nhlfe.
  */	
@@ -851,7 +847,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
 		NHLFE_WUNLOCK();
 	
-		ifa_free(&mia->mia_ifa);
+		ifa_free(ifa);
 		break;
 	case SIOCGIFADDR:
 		
@@ -1005,7 +1001,8 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	int omsk = RTF_MPLS_OMASK;
 	int fmsk = RTF_MPLS; 
 	struct sockaddr_ftn sftn;
-	struct sockaddr *nh;
+	struct sockaddr *gw;
+	size_t len;
 	int error;
 	
 #ifdef MPLS_DEBUG
@@ -1043,6 +1040,22 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  */
 	bzero(&sftn, sizeof(sftn));
 	sftn.sftn_len = sizeof(sftn);
+	
+	if (rt == NULL) 
+		oifa = ifp->if_addr;
+	else
+		oifa = rt->rt_ifa;
+		
+	ifa_ref(oifa);
+	gw = oifa->ifa_addr;
+	
+	sftn.sftn_family = gw->sa_family;
+	
+	len = (gw->sa_len - offsetof(struct sockaddr, sa_data));
+	bcopy(gw->sa_data, sftn.sftn_data, len);	
+/*
+ * Map out-segment.
+ */		
 	sftn.sftn_op = flags & RTF_MPLS_OMASK;
 	
 	if (flags & RTF_PUSH)  
@@ -1052,18 +1065,9 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	
 	sftn.sftn_vprd = sftn.sftn_label;
 	
-	nh = (struct sockaddr *)&sftn;
+	gw = (struct sockaddr *)&sftn;
 	
-	if (rt == NULL) 
-		oifa = ifp->if_addr;
-	else
-		oifa = rt->rt_ifa;
-		
-	ifa_ref(oifa);
-/*
- * Map out-segment.
- */	
-	mpls_sftncopyin(oifa->ifa_addr, nh, mia->mia_dstaddr);
+	bcopy(gw, mia->mia_dstaddr, gw->sa_len);
 /*
  * Map in-segment.
  */
@@ -1115,12 +1119,19 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 		if (flags & RTF_STK) 
 			rt->rt_flags |= RTF_STK;
 		else if (flags & RTF_PUSH) {
-		
-			mpls_sftncopyin(rt->rt_gateway, nh, NULL);	
 /*
  * Anotate gateway address with MPLS label denotes lsp_in on fec.
- */			
-			error = rt_setgate(rt, rt_key(rt), nh);
+ */	
+			len = rt->rt_gateway->sa_len - 
+				offsetof(struct sockaddr, sa_data);
+			
+			if (gw->sa_family != rt->rt_gateway->sa_family) {
+				gw->sa_family = rt->rt_gateway->sa_family;
+				bzero(gw->sa_data, SFTN_DATA_LEN);
+			}
+			bcopy(rt->rt_gateway->sa_data, gw->sa_data, len);	
+		
+			error = rt_setgate(rt, rt_key(rt), gw);
 			if (error == 0) {
 				rt->rt_mtu -= MPLS_HDRLEN;
 				rt->rt_flags |= RTF_MPE;

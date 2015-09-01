@@ -265,11 +265,11 @@ struct sockaddr_mpls {
  * (c) rt_gateway in rtentry(9) denotes ilm
  * (d) rt_gateway in rtentry(9) denotes fec, fastpath
  */
- 
+#define SFTN_DATA_LEN 	52
 struct sockaddr_ftn {
     uint8_t 	sftn_len;    
-    sa_family_t 	sftn_family;    /* address family, gateway address (nh) */
-    uint16_t 	sftn_pad0[26];    /* stores nh */
+    sa_family_t 	sftn_family;    /* address family, gateway address (nh) */   
+    char 	sftn_data[SFTN_DATA_LEN];    /* stores data */
     uint32_t 	sftn_op;    /* MPLS operation */
     uint32_t 	sftn_label;    /* stores seg_out */
     uint32_t 	sftn_vprd;    /* route distinguisher */
@@ -427,51 +427,6 @@ mpls_sa_equal(struct sockaddr *sa0, struct sockaddr *sa1)
 out:	
 	return (equals);
 }
-
-static __inline void  	mpls_sftncopyin(struct sockaddr *, 
-	struct sockaddr *, struct sockaddr *);
-static __inline void 
-mpls_sftncopyin(struct sockaddr *sa0, struct sockaddr *sa1, 
-		struct sockaddr *sa2)
-{
-	char *y, *x1, *x0, *max0, *max1;
-	
-	KASSERT((sa0 != NULL), ("Invalid argument"));
-	KASSERT((sa1 != NULL), ("Invalid argument"));
-	
-	x1 = sa1->sa_data; 	/* storage for < op, seg_out, rd > */
-	x0 = sa0->sa_data; 	/* source */ 
-/*
- * [max0; max1[ denotes padding between data and < op, seg_out, rd >.
- */
-	max0 = x1 + (sa0->sa_len - offsetof(struct sockaddr, sa_data));
-	max1 = x1 + (offsetof(struct sockaddr_ftn, sftn_op) - 
-		offsetof(struct sockaddr, sa_data));
-/*
- * Copy data.
- */	
-	for (;x0 < max0; x0++, x1++) 
-		*x1 = *x0;
-/*
- * Zero out until < op, seg_out, rd >.
- */		
-	for (;max0 < max1; max0++)
-		*max0 &= 0x00; 	
-
-	if (sa2 != NULL) {
-		y = sa2->sa_data; 	/* destination */
-/*
- * Reinitialize.
- */		
-		x1 = sa1->sa_data;
-		max0 = x1 + (sa1->sa_len - offsetof(struct sockaddr, sa_data));
-/*
- * Finalize.
- */	
-		for (;y < max0; y++, x1++) 
-			*y = *x1;
-	}
-} 
 
 /*
  * MPLS per-interface state.
