@@ -582,34 +582,6 @@ out:
  *
  */ 
  
-#ifdef MPLS_DEBUG
-static __inline void     print_cmd(const char *, int);
-static __inline void     
-print_cmd(const char *fname, int cmd)
-{
-    char *msg;
-    
-    switch (cmd) {
-    case SIOCAIFADDR:
-        msg = "SIOCAIFADDR"; 
-        break;
-    case SIOCSIFADDR:
-        msg = "SIOCSIFADDR";        
-        break;
-    case SIOCDIFADDR:
-        msg = "SIOCDIFADDR";    
-        break;
-    case SIOCGIFADDR:
-        msg = "SIOCGIFADDR";        
-        break;
-    default:
-        msg = "n/a";        
-        break;
-    }
-    (void)printf("%s: %s\n", fname, msg);
-}
-#endif /* MPLS_DEBUG */
- 
 int
 mpls_control(struct socket *so __unused, u_long cmd, caddr_t data, 
 		struct ifnet *ifp, struct thread *td)
