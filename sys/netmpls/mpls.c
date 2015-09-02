@@ -896,6 +896,8 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 				IF_ADDR_WUNLOCK(ifp);
 				
 				ifa->ifa_flags |= IFA_NHLFE;
+				
+				ifa_ref(ifa);
 								
 			} else	
 				error = ENOBUFS;
@@ -991,9 +993,9 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 		if (MPLS_IFINFO_IFA(ifp) == ifa) {
 			MPLS_IFINFO_IFA(ifp) = NULL;
 			ifp->if_flags &= ~IFF_MPE;			
+			ifa_free(ifa);
 		}
-		IF_AFDATA_WUNLOCK(ifp);
-		ifa_free(ifa);	
+		IF_AFDATA_WUNLOCK(ifp);	
 	} else {	
 /*
  * Remove MPLS label binding scoped on set containing fec.
@@ -1062,10 +1064,10 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	}
 /*
  * Finalize.
-				
+ */				
 	bzero(&mia->mia_seg, sizeof(mia->mia_seg));			
-	bzero(&mia->mia_nh, sizeof(mia->mia_nh));			
- */	
+	bzero(&mia->mia_nh, sizeof(mia->mia_nh));
+		
 	mia->mia_rt_flags = 0;
 	if (mia->mia_x != NULL) {
 		ifa_free(mia->mia_x);
@@ -1180,7 +1182,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 		goto out;
 
 	if (rt == NULL) {
-		ifa = miatoifa(mia);
+		ifa = miatoifa(ifa);
 /*
  * Bind interface, if MPLS label binding was 
  * caused by SIOC[AS]IFADDR control operation.
