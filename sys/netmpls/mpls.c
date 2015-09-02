@@ -896,9 +896,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 				IF_ADDR_WUNLOCK(ifp);
 				
 				ifa->ifa_flags |= IFA_NHLFE;
-				
-				ifa_ref(ifa);
-								
+						
 			} else	
 				error = ENOBUFS;
 						
@@ -976,7 +974,6 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 {
 	struct sockaddr_ftn sftn;
 	struct sockaddr *seg;
-	struct ifaddr *ifa;
 	int error;
 	
 #ifdef MPLS_DEBUG
@@ -985,15 +982,13 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	error = 0;
 	
 	if (rt == NULL) {
-		ifa = miatoifa(mia);
 /*
  * Remove MPLS label binding scoped on per-interface MPLS label space.
  */	
-		IF_AFDATA_WLOCK(ifp);	
-		if (MPLS_IFINFO_IFA(ifp) == ifa) {
+		IF_AFDATA_WLOCK(ifp);
+		if (MPLS_IFINFO_IFA(ifp) != NULL) {
 			MPLS_IFINFO_IFA(ifp) = NULL;
-			ifp->if_flags &= ~IFF_MPE;			
-			ifa_free(ifa);
+			ifp->if_flags &= ~IFF_MPE;
 		}
 		IF_AFDATA_WUNLOCK(ifp);	
 	} else {	
@@ -1088,7 +1083,6 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 		struct sockaddr *sa, int flags)
 {
 	struct ifaddr *oifa = NULL;
-	struct ifaddr *ifa = NULL;
 	int omsk = RTF_MPLS_OMASK;
 	int fmsk = RTF_MPLS; 
 	struct sockaddr_ftn sftn;
@@ -1182,15 +1176,12 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 		goto out;
 
 	if (rt == NULL) {
-		ifa = miatoifa(ifa);
 /*
  * Bind interface, if MPLS label binding was 
  * caused by SIOC[AS]IFADDR control operation.
  */		
-		ifa_ref(ifa);
-		
 		IF_AFDATA_WLOCK(ifp);
-		MPLS_IFINFO_IFA(ifp) = ifa;
+		MPLS_IFINFO_IFA(ifp) = miatoifa(mia);
 		ifp->if_flags |= IFF_MPE;	
 		IF_AFDATA_WUNLOCK(ifp);		
 	} else {
@@ -1259,7 +1250,8 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	}
 	
 	if (error == 0) 
-		mia->mia_flags |= IFA_ROUTE;		
+		mia->mia_flags |= IFA_ROUTE;
+	
 out:
 	if (oifa != NULL)
 		ifa_free(oifa);
