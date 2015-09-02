@@ -102,7 +102,7 @@ mpls_rn_match(void *v_arg, struct radix_node_head *rnh)
 }
 
 /*
- * Removes incoming-label map (ilm).
+ * Remove incoming-label map (ilm).
  */
 static void	
 mpls_rn_clsroute(struct radix_node *rn, struct radix_node_head *rnh)
@@ -163,26 +163,27 @@ int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *,
 	struct rtentry **, u_int);
 
 /*
- * Accept by socket(4) in AF_ROUTE or by mpls_control received 
- * service requests.
+ * Accept by socket(4) in AF_ROUTE received service requests.
  *
  *  o RTAX_DST holds key x for fec = < x, nh > where nh -> ifp
  *
  *  o RTAX_GATEWAY holds by sockaddr_ftn{} for MPLS label
- *    binding necessary < seg_i , seg_j > tuple where seg_i 
- *    denotes key for by nhlfe generated ilm, Furthermore,
- *    seg_j denotes typically upstream label for transmission
- *    downstream by interface ifp in link-layer. 
+ *    binding necessary 
+ *
+ *      < seg_i , seg_j > 
+ *
+ *    tuple where seg_i denotes key for by nhlfe generated ilm, 
+ *    Furthermore, seg_j denotes typically upstream label for 
+ *    transmission downstream by interface ifp in link-layer. 
  *  
- *  o In rt_addrinfo{} spi contained flags encodes with MPLS 
- *    label binding linked operation.
+ *  o In rt_addrinfo{} Service Primitive (spi) contained flags 
+ *    encodes with MPLS label binding linked operation.
  *   
  *    RTF_{POP|PUSH|SWAP} - self expanatory.
  *
- *    RTF_MPE, by fec generated nhlfe encodes with seg_j initial 
- *    label of Label Switch Path (lsp) in data plane.
+ *    RTF_MPE, denotes initial label of Label Switch Path.
  *
- *  o RTF_STK, denotes label stacking, but not yet fully
+ *    RTF_STK, denotes label stacking, but not yet fully
  *    implemented.
  */
 int

@@ -564,9 +564,9 @@ mpls_purgeaddr(struct ifaddr *ifa)
 /*
  * Dequeue nhlfe.
  */	
-	NHLFE_WLOCK();
+	MPLS_IFADDR_WLOCK();
 	TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
-	NHLFE_WUNLOCK();
+	MPLS_IFADDR_WUNLOCK();
 	
 	ifa_free(&mia->mia_ifa);
 out:	
@@ -581,7 +581,7 @@ out:
  * Generic mpls control operations.
  *
  */ 
- 
+
 int
 mpls_control(struct socket *so __unused, u_long cmd, caddr_t data, 
 		struct ifnet *ifp, struct thread *td)
@@ -666,7 +666,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			ifa_ref(ifp->if_addr);
 			oifa = ifp->if_addr;
 			x = oifa->ifa_addr;
-
+ 
 			flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
 		} else
 			flags = ifra->ifra_flags;
@@ -726,7 +726,8 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			if (oifa == NULL) {
 				ifa_ref(ifp->if_addr);
 				oifa = ifp->if_addr;
-			}			  
+			}
+	  
 		} else if (((fec = rtalloc1_fib(x, 0, 0UL, 0)) != NULL) 
 			&& (fec->rt_gateway != NULL) 
 			&& (fec->rt_ifp != NULL)
@@ -755,7 +756,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 				continue;
 
 			if (satosmpls_label(ifa->ifa_addr) 
-				== satosmpls_label(seg)) {				
+				== satosmpls_label(seg)) {			
 				ifa_ref(ifa);
 				break;
 			}
@@ -783,7 +784,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 /*
  * Try to fetch nhlfe by segment on global scope.
  */			
-			NHLFE_RLOCK();
+			MPLS_IFADDR_RLOCK();
 			TAILQ_FOREACH(mia, &mpls_ifaddrhead, mia_link) {
 			
 				if (satosmpls_label(mia->mia_addr) 
@@ -805,7 +806,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 				ifa = miatoifa(ifa);
 				ifa_ref(ifa);
 			}
-			NHLFE_RUNLOCK();
+			MPLS_IFADDR_RUNLOCK();
 		} 	
 	}
 	
@@ -820,22 +821,31 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			mia = (struct mpls_ifaddr *)
 				malloc(sizeof(*mia), M_IFADDR, 
 					M_ZERO|M_NOWAIT);
-		
 			if (mia != NULL) {			
 				ifa = &mia->mia_ifa;
-				ifa_init(ifa);				
+				ifa_init(ifa);
+				ifa->ifa_addr = 
+					(struct sockaddr *)&mia->mia_seg;
+				ifa->ifa_dstaddr = 
+					(struct sockaddr *)&mia->mia_nh;
+				ifa->ifa_netmask = 
+					(struct sockaddr *)&mia->mia_seg;
+				ifa->ifa_flags |= IFA_NHLFE;
+/*
+ * Enqueue globaly.
+ */				
+ 				ifa_ref(ifa);
+				MPLS_IFADDR_WLOCK();
+				TAILQ_INSERT_TAIL(&mpls_ifaddrhead, 
+					mia, mia_link);	
+				MPLS_IFADDR_WUNLOCK();		
 			} else	
 				error = ENOBUFS;
 						
 		} else if (ifa->ifa_flags & IFA_NHLFE) { 
 /*
  * Reinitialize, if possible.
- */										
-			if ((mpls_flags(ifa) & RTF_PUSH)
-				&& (fec != NULL)) {
-				error = EADDRINUSE;
-				break;
-			}	
+ */
 			error = mpls_ifscrub(ifp, ifatomia(ifa), fec);
 			mia = (error == 0) ? ifatomia(ifa) : NULL;	
 		} else 
@@ -843,20 +853,6 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		
 		if (mia == NULL)
 			break;	
-		
-		ifa->ifa_addr = (struct sockaddr *)&mia->mia_seg;
-		ifa->ifa_dstaddr = (struct sockaddr *)&mia->mia_nh;	
-		ifa->ifa_netmask = (struct sockaddr *)&mia->mia_seg;		
-/*
- * Enqueue and append nhlfe at link-level address on interface.
- */	
-		ifa_ref(ifa);
-
-		NHLFE_WLOCK();
-		TAILQ_INSERT_TAIL(&mpls_ifaddrhead, mia, mia_link);	
-		NHLFE_WUNLOCK();
-		
-		ifa->ifa_flags |= IFA_NHLFE;
 
 		error = mpls_ifinit(ifp, mia, fec, seg, flags);
 		if (error == 0)
@@ -875,9 +871,9 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 /*
  * Dequeue nhlfe.
  */	
-		NHLFE_WLOCK();
+		MPLS_IFADDR_WLOCK();
 		TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
-		NHLFE_WUNLOCK();
+		MPLS_IFADDR_WUNLOCK();
 	
 		ifa_free(ifa);
 		break;
@@ -928,7 +924,21 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	
 	error = 0;
 	
-	if (rt != NULL) {
+	if (rt == NULL) {
+/*
+ * Remove MPLS label binding scoped on per-interface MPLS label space.
+ */	
+		IF_AFDATA_WLOCK(ifp);	
+		if (MPLS_IFINFO_IFA(ifp) == ifa) {
+			MPLS_IFINFO_IFA(ifp) = NULL;
+			ifp->if_flags &= ~IFF_MPE;			
+		}
+		IF_AFDATA_WUNLOCK(ifp);
+		ifa_free(ifa);	
+	} else {	
+/*
+ * Remove MPLS label binding scoped on set containing fec.
+ */			
 		if (rt->rt_flags & RTF_STK) 
 			rt->rt_flags &= ~RTF_STK;
 		else if (mia->mia_rt_flags & RTF_PUSH) {
@@ -962,18 +972,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 			if (error != 0)
 				goto out;	
 		}
-	} else {
-/*
- * MPLS label binding scoped on per-interface MPLS label space.
- */	
-		IF_AFDATA_WLOCK(ifp);	
-		if (MPLS_IFINFO_IFA(ifp) == ifa) {
-			MPLS_IFINFO_IFA(ifp) = NULL;
-			ifp->if_flags &= ~IFF_MPE;			
-		}
-		IF_AFDATA_WUNLOCK(ifp);
-		ifa_free(ifa);	
-	}
+	} 
 	bzero(seg, sizeof(sftn));	
 /*
  * Remove corrosponding llentry{}.
@@ -1097,9 +1096,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 		sftn.sftn_label = satosftn_label(sa) & MPLS_LABEL_MASK;
 	
 	sftn.sftn_vprd = sftn.sftn_label;
-	
 	gw = (struct sockaddr *)&sftn;
-	
 	bcopy(gw, mia->mia_dstaddr, gw->sa_len);
 /*
  * Map in-segment.
@@ -1124,8 +1121,8 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 /*
  * Append nhlfe on lla.
  */	
-	ifa_ref(&mia->mia_ifa);
 	ifa = miatoifa(mia);
+	ifa_ref(ifa);
 	
 	IF_ADDR_WLOCK(ifp);
 	TAILQ_INSERT_AFTER(&ifp->if_addrhead, ifp->if_addr, ifa, ifa_link);
@@ -1142,19 +1139,48 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * Bind interface, if MPLS label binding was 
  * caused by SIOC[AS]IFADDR control operation.
  */		
+		ifa_ref(ifa);
+		
 		IF_AFDATA_WLOCK(ifp);
 		MPLS_IFINFO_IFA(ifp) = ifa;
 		ifp->if_flags |= IFF_MPE;	
-		IF_AFDATA_WUNLOCK(ifp);	
-			
-		ifa_ref(&mia->mia_ifa);	
-	} else {			
+		IF_AFDATA_WUNLOCK(ifp);		
+	} else {
+/*
+ * Bind MPLS label binding scoped on set containing fec.			
+ *
+ * Fastpath into MPLS transit will be applied on fec, when 
+ * MPLS label binding states initial label (lsp_in) on Label 
+ * Switch Path (lsp). 
+ *
+ * The gateway address on by fec implementing rtentry(9) is 
+ * extended by < op, lsp_in, rd > where is defined by fec
+ * generated nhlfe.
+ *
+ *      + rt_key              .       + MPLS label (BoS)
+ *     |                      .       |
+ *     v                      .       v
+ *   +-------------+----------+-----+------+------+
+ *   | 192.168.3.6 | 10.6.1.6 | Op  | 666  | VPRD |
+ *   +-------------+----------+-----+------+------+
+ *                   A
+ *                   |
+ *                   + rt_gateway
+ *
+ * This avoids a second routing table lookup by service 
+ * providing MPLS layer, when handoff by protocol-layer
+ * processed message primitives (mpi) into MPLS data 
+ * plane was performed. 
+ *
+ * Because by service requesting protocol-layer performed
+ * routing decision led to a rtentry(9) with an extended 
+ * gateway address (see above), where is therefore accepted 
+ * as argument by mpls_output.
+ */				
 		if (flags & RTF_STK) 
 			rt->rt_flags |= RTF_STK;
 		else if (flags & RTF_PUSH) {
-/*
- * Anotate gateway address with MPLS label denotes lsp_in on fec.
- */	
+
 			len = rt->rt_gateway->sa_len - 
 				offsetof(struct sockaddr, sa_data);
 			
@@ -1163,13 +1189,18 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 				bzero(gw->sa_data, SFTN_DATA_LEN);
 			}
 			bcopy(rt->rt_gateway->sa_data, gw->sa_data, len);	
-		
+/*
+ * Anotate gateway address with MPLS label denotes lsp_in on fec.
+ */		
 			error = rt_setgate(rt, rt_key(rt), gw);
 			if (error == 0) {
 				rt->rt_mtu -= MPLS_HDRLEN;
 				rt->rt_flags |= RTF_MPE;
 			}
 		} else {
+/*
+ * Generate by nhlfe enclosed Incoming Label Map (ilm). 
+ */			
 			error = rtrequest_fib((int)RTM_ADD, 
 				mia->mia_addr, 
 				mia->mia_dstaddr, 

@@ -103,11 +103,10 @@ extern int 	mpls_ip_checkbasic(struct mbuf **);
 #ifdef INET6
 extern int 	mpls_ip6_checkbasic(struct mbuf **);
 #endif /* INET6 */
+
 /*
- * Implementation of MPLS_ARP is derived from 
- * those in netinet/if_ether.c. 
- *
- * MPLS_ARP resolves lla by MPLS label.
+ * The implementation of MPLS_ARP is derived from those still 
+ * resides in netinet/if_ether.c. 
  *
  *  1. Alice performs x-connect such that corrosponding 
  *     llentry{} is allocated by mpls_arp_ifinit. 
@@ -174,11 +173,11 @@ sysctl_mpls_arp(SYSCTL_HANDLER_ARGS)
 
 	if (enable != mpls_arp) {
 		
-		NHLFE_WLOCK();
+		MPLS_IFADDR_WLOCK();
 		TAILQ_FOREACH(nhlfe, &mpls_ifaddrhead, mia_link) {
 			nhlfe->mia_lle = NULL;
 		}		
-		NHLFE_WUNLOCK();	
+		MPLS_IFADDR_WUNLOCK();	
 		
 		mpls_arp = enable;
 	}
@@ -238,7 +237,7 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 		goto bad;
 	}	
 /*
- * Resolve lla by held route.
+ * Resolve lla by held rtentry(9) maps to.
  */	
 	if (mpls_arp == 0) {
 		error = EINVAL;
@@ -266,7 +265,7 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 	}		
 	error = ECONNABORTED;
 /*
- * MPLS_ARP.
+ * Resolve by MPLS_ARP.
  */			
 	if (m->m_flags & M_BCAST) {
 		bcopy(ifp->if_broadcastaddr, lla, ifp->if_addrlen);

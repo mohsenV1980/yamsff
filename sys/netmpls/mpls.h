@@ -457,15 +457,15 @@ struct mpls_ifinfo {
 TAILQ_HEAD(mpls_head, mpls_ifaddr);
 
 extern struct mpls_head 	mpls_ifaddrhead;
-extern struct rwlock 		mpls_lock;
+extern struct rwlock 		mpls_ifaddr_lock;
 
-#define	NHLFE_LOCK_ASSERT() 	rw_assert(&mpls_lock, RA_LOCKED)
-#define	NHLFE_RLOCK() 		rw_rlock(&mpls_lock)
-#define	NHLFE_RLOCK_ASSERT() 	rw_assert(&mpls_lock, RA_RLOCKED)
-#define	NHLFE_RUNLOCK() 	rw_runlock(&mpls_lock)
-#define	NHLFE_WLOCK() 		rw_wlock(&mpls_lock)
-#define	NHLFE_WLOCK_ASSERT() 	rw_assert(&mpls_lock, RA_WLOCKED)
-#define	NHLFE_WUNLOCK() 	rw_wunlock(&mpls_lock)
+#define	MPLS_IFADDR_LOCK_ASSERT() 	rw_assert(&mpls_ifaddr_lock, RA_LOCKED)
+#define	MPLS_IFADDR_RLOCK() 		rw_rlock(&mpls_ifaddr_lock)
+#define	MPLS_IFADDR_RLOCK_ASSERT() 	rw_assert(&mpls_ifaddr_lock, RA_RLOCKED)
+#define	MPLS_IFADDR_RUNLOCK() 	rw_runlock(&mpls_ifaddr_lock)
+#define	MPLS_IFADDR_WLOCK() 		rw_wlock(&mpls_ifaddr_lock)
+#define	MPLS_IFADDR_WLOCK_ASSERT() 	rw_assert(&mpls_ifaddr_lock, RA_WLOCKED)
+#define	MPLS_IFADDR_WUNLOCK() 	rw_wunlock(&mpls_ifaddr_lock)
 
 extern u_long	mpls_raw_sendspace;
 extern u_long	mpls_raw_recvspace;

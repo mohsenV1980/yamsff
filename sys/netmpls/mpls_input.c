@@ -172,9 +172,9 @@ void	(*mpls_dn_p)(struct mbuf *, struct ifnet *);
  * Defines set containing nhlfe. 
  */
 struct mpls_head mpls_ifaddrhead;
-struct rwlock mpls_lock;
+struct rwlock mpls_ifaddr_lock;
 
-RW_SYSINIT(mpls_lock, &mpls_lock, "mpls_lock");
+RW_SYSINIT(mpls_ifadddr_lock, &mpls_ifaddr_lock, "mpls_ifaddr_lock");
 
 /*
  * MPLS input queue is managed by netisr(9).
