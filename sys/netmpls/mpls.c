@@ -564,11 +564,17 @@ mpls_purgeaddr(struct ifaddr *ifa)
 /*
  * Dequeue nhlfe.
  */	
+	IF_ADDR_WLOCK(ifp);
+	TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
+	IF_ADDR_WUNLOCK(ifp);
+		
+	ifa_free(ifa);
+	
 	MPLS_IFADDR_WLOCK();
 	TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
 	MPLS_IFADDR_WUNLOCK();
 	
-	ifa_free(&mia->mia_ifa);
+	ifa_free(ifa);
 out:	
 	if (fec != NULL) 
 		RTFREE_LOCKED(fec);
@@ -581,6 +587,34 @@ out:
  * Generic mpls control operations.
  *
  */ 
+
+#ifdef MPLS_DEBUG
+static __inline void     print_cmd(const char *, int);
+static __inline void     
+print_cmd(const char *fname, int cmd)
+{
+    char *msg;
+    
+    switch (cmd) {
+    case SIOCAIFADDR:
+        msg = "SIOCAIFADDR"; 
+        break;
+    case SIOCSIFADDR:
+        msg = "SIOCSIFADDR";        
+        break;
+    case SIOCDIFADDR:
+        msg = "SIOCDIFADDR";    
+        break;
+    case SIOCGIFADDR:
+        msg = "SIOCGIFADDR";        
+        break;
+    default:
+        msg = "n/a";        
+        break;
+    }
+    (void)printf("%s: %s\n", fname, msg);
+}
+#endif /* MPLS_DEBUG */
 
 int
 mpls_control(struct socket *so __unused, u_long cmd, caddr_t data, 
@@ -614,7 +648,9 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		error = EADDRNOTAVAIL;
  		goto out;			
  	}
-
+#ifdef MPLS_DEBUG
+    print_cmd(__func__, cmd);
+#endif /* MPLS_DEBUG */
 	switch (cmd) {
 	case SIOCAIFADDR:
 	case SIOCSIFADDR:
@@ -757,6 +793,9 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 
 			if (satosmpls_label(ifa->ifa_addr) 
 				== satosmpls_label(seg)) {			
+#ifdef MPLS_DEBUG
+    print_cmd("fetch nhlfe by seg on local scope", cmd);
+#endif /* MPLS_DEBUG */					
 				ifa_ref(ifa);
 				break;
 			}
@@ -773,6 +812,9 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 
 				if (mpls_sa_equal(x, 
 					ifa->ifa_dstaddr)) {
+#ifdef MPLS_DEBUG
+    print_cmd("fetch nhlfe by x on local scope", cmd);
+#endif /* MPLS_DEBUG */					
 					ifa_ref(ifa);
 					break;
 				}
@@ -824,21 +866,37 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			if (mia != NULL) {			
 				ifa = &mia->mia_ifa;
 				ifa_init(ifa);
+				
+				ifa->ifa_ifp = ifp;	
+				ifa->ifa_metric = ifp->if_metric;
+				
 				ifa->ifa_addr = 
 					(struct sockaddr *)&mia->mia_seg;
 				ifa->ifa_dstaddr = 
 					(struct sockaddr *)&mia->mia_nh;
 				ifa->ifa_netmask = 
-					(struct sockaddr *)&mia->mia_seg;
-				ifa->ifa_flags |= IFA_NHLFE;
+					(struct sockaddr *)&mia->mia_seg;			
 /*
- * Enqueue globaly.
+ * Enqueue globally.
  */				
  				ifa_ref(ifa);
+				
 				MPLS_IFADDR_WLOCK();
 				TAILQ_INSERT_TAIL(&mpls_ifaddrhead, 
 					mia, mia_link);	
-				MPLS_IFADDR_WUNLOCK();		
+				MPLS_IFADDR_WUNLOCK();
+/*
+ * Append nhlfe on lla.
+ */	
+				ifa_ref(ifa);
+	
+				IF_ADDR_WLOCK(ifp);
+				TAILQ_INSERT_AFTER(&ifp->if_addrhead, 
+					ifp->if_addr, ifa, ifa_link);
+				IF_ADDR_WUNLOCK(ifp);
+				
+				ifa->ifa_flags |= IFA_NHLFE;
+								
 			} else	
 				error = ENOBUFS;
 						
@@ -864,17 +922,22 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
  			error = EADDRNOTAVAIL;	
  			break;
  		}
- 		
  		error = mpls_ifscrub(ifp, mia, fec);
 		if (error != 0) 
 			break;
 /*
  * Dequeue nhlfe.
  */	
+		IF_ADDR_WLOCK(ifp);
+		TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
+		IF_ADDR_WUNLOCK(ifp);
+		
+		ifa_free(ifa);
+		
 		MPLS_IFADDR_WLOCK();
 		TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
 		MPLS_IFADDR_WUNLOCK();
-	
+		
 		ifa_free(ifa);
 		break;
 	case SIOCGIFADDR:
@@ -909,22 +972,18 @@ out:
 static int  
 mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 {
-	struct ifaddr *ifa = miatoifa(mia);
 	struct sockaddr_ftn sftn;
 	struct sockaddr *seg;
-	
+	struct ifaddr *ifa;
 	int error;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
-	
-	bzero(&sftn, sizeof(sftn));
-	seg = (struct sockaddr *)&sftn; 
-	
 	error = 0;
 	
 	if (rt == NULL) {
+		ifa = miatoifa(mia);
 /*
  * Remove MPLS label binding scoped on per-interface MPLS label space.
  */	
@@ -946,6 +1005,9 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 /*
  * XXX; ugly... but I'll reimplement this code-section...
  */			
+			bzero(&sftn, sizeof(sftn));
+			seg = (struct sockaddr *)&sftn; 
+			
 			bcopy(rt->rt_gateway, seg, rt->rt_gateway->sa_len);
 /*
  * Restore gateway address, if fec denotes fastpath (lsp_in).
@@ -973,7 +1035,8 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 				goto out;	
 		}
 	} 
-	bzero(seg, sizeof(sftn));	
+	bzero(&sftn, sizeof(sftn));
+	seg = (struct sockaddr *)&sftn;
 /*
  * Remove corrosponding llentry{}.
  */		
@@ -999,10 +1062,10 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	}
 /*
  * Finalize.
- */				
+				
 	bzero(&mia->mia_seg, sizeof(mia->mia_seg));			
 	bzero(&mia->mia_nh, sizeof(mia->mia_nh));			
-	
+ */	
 	mia->mia_rt_flags = 0;
 	if (mia->mia_x != NULL) {
 		ifa_free(mia->mia_x);
@@ -1010,13 +1073,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	}
 	mia->mia_lle = NULL;	
 	
-	IF_ADDR_WLOCK(ifp);
-	TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
-	IF_ADDR_WUNLOCK(ifp);
-	
-	ifa_free(ifa);
-	
-	ifa->ifa_flags &= ~IFA_ROUTE;
+	mia->mia_flags &= ~IFA_ROUTE;
 out:
 	return (error);
 }
@@ -1115,26 +1172,15 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	mia->mia_x = oifa;
 
 	oifa->ifa_rtrequest = mpls_link_rtrequest;	
-		
-	mia->mia_ifp = ifp;	
-	mia->mia_metric = ifp->if_metric;
-/*
- * Append nhlfe on lla.
- */	
-	ifa = miatoifa(mia);
-	ifa_ref(ifa);
-	
-	IF_ADDR_WLOCK(ifp);
-	TAILQ_INSERT_AFTER(&ifp->if_addrhead, ifp->if_addr, ifa, ifa_link);
-	IF_ADDR_WUNLOCK(ifp);
 /*
  * Create llentry{} by SIOCSIFADDR triggered inclusion mapping.
  */		
-	error = (*ifp->if_ioctl)(ifp, SIOCSIFADDR, (void *)ifa);
+	error = (*ifp->if_ioctl)(ifp, SIOCSIFADDR, (void *)mia);
 	if (error != 0) 
 		goto out;
 
 	if (rt == NULL) {
+		ifa = miatoifa(mia);
 /*
  * Bind interface, if MPLS label binding was 
  * caused by SIOC[AS]IFADDR control operation.
@@ -1157,7 +1203,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * extended by < op, lsp_in, rd > where is defined by fec
  * generated nhlfe.
  *
- *      + rt_key              .       + MPLS label (BoS)
+ *     + rt_key               .       + MPLS label (BoS)
  *     |                      .       |
  *     v                      .       v
  *   +-------------+----------+-----+------+------+
@@ -1211,7 +1257,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	}
 	
 	if (error == 0) 
-		ifa->ifa_flags |= IFA_ROUTE;		
+		mia->mia_flags |= IFA_ROUTE;		
 out:
 	if (oifa != NULL)
 		ifa_free(oifa);

@@ -776,6 +776,8 @@ mpls_arp_ifinit(struct ifnet *ifp, struct ifaddr *ifa)
 	struct llentry *lle;
 	
 #ifdef MPLS_DEBUG	
+	(void)printf("%s\n", __func__);
+	
 	if (ifa == NULL)
 		return (EINVAL);
 	
