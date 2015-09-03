@@ -922,24 +922,23 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
  */			
 		if (rt->rt_flags & RTF_STK) 
 			rt->rt_flags &= ~RTF_STK;
-		else if (mia->mia_rt_flags & RTF_PUSH) {
-			
+		else if (rt->rt_flags & RTF_MPE) {
 /*
- * XXX; ugly... but I'll reimplement this code-section...
- */			
+ * Restore former gateway address, if fec denotes fastpath.
+ */	
 			bzero(&sftn, sizeof(sftn));
-			seg = (struct sockaddr *)&sftn; 
 			
-			bcopy(rt->rt_gateway, seg, rt->rt_gateway->sa_len);
-/*
- * Restore gateway address, if fec denotes fastpath (lsp_in).
- */		
- 			if (rt->rt_flags & RTF_GATEWAY) 
-				seg->sa_len = rt_key(rt)->sa_len;
-			else	
-				seg->sa_len = sizeof(struct sockaddr_dl);
-				
-			error = rt_setgate(rt, rt_key(rt), seg);
+			if (rt->rt_flags & RTF_GATEWAY) {
+				bcopy(rt->rt_gateway, &sftn, 
+					rt_key(rt)->sa_len);
+				sftn.sftn_len = rt_key(rt)->sa_len;
+			} else {
+				bcopy(rt->rt_gateway, &sftn, 
+					sizeof(struct sockaddr_dl));
+				sftn.sftn_len = sizeof(struct sockaddr_dl);
+			}
+			error = rt_setgate(rt, rt_key(rt), 
+				(struct sockaddr *)&sftn);
 			if (error != 0)
 				goto out;
 				
@@ -1003,11 +1002,9 @@ static int
 mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt, 
 		struct sockaddr *sa, int flags)
 {
+	int omsk = RTF_MPLS_OMASK, fmsk = RTF_MPLS; 
 	struct ifaddr *ifa = NULL;
-	int omsk = RTF_MPLS_OMASK;
-	int fmsk = RTF_MPLS; 
 	struct sockaddr_ftn sftn;
-	struct sockaddr *gw;
 	size_t len;
 	int error;
 	
@@ -1044,21 +1041,19 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 /*
  * Prepare storage for gateway address and < op, seg_out, rd >.	
  */
-	bzero(&sftn, sizeof(sftn));
-	sftn.sftn_len = sizeof(sftn);
-	
 	if (rt == NULL) 
 		ifa = ifp->if_addr;
 	else
 		ifa = rt->rt_ifa;
 		
 	ifa_ref(ifa);
-	gw = ifa->ifa_addr;
 	
-	sftn.sftn_family = gw->sa_family;
+	bzero(&sftn, sizeof(sftn));
+	sftn.sftn_len = sizeof(sftn);
+	sftn.sftn_family = ifa->ifa_addr->sa_family;
 	
-	len = (gw->sa_len - offsetof(struct sockaddr, sa_data));
-	bcopy(gw->sa_data, sftn.sftn_data, len);	
+	len = (ifa->ifa_addr->sa_len - offsetof(struct sockaddr, sa_data));
+	bcopy(ifa->ifa_addr->sa_data, sftn.sftn_data, len);	
 /*
  * Map out-segment.
  */		
@@ -1070,8 +1065,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 		sftn.sftn_label = satosftn_label(sa) & MPLS_LABEL_MASK;
 	
 	sftn.sftn_vprd = sftn.sftn_label;
-	gw = (struct sockaddr *)&sftn;
-	bcopy(gw, mia->mia_dstaddr, gw->sa_len);
+	bcopy(&sftn, mia->mia_dstaddr, ifa->ifa_addr->sa_len);
 /*
  * Map in-segment.
  */
@@ -1108,8 +1102,12 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	
 	} else {
 /*
- * Bind MPLS label binding scoped on set containing fec.			
- *
+ * MPLS label binding scoped on set containing fec.			
+ */			
+		if (flags & RTF_STK) 
+			rt->rt_flags |= RTF_STK;
+		else if (flags & RTF_PUSH) {
+/* 
  * Fastpath into MPLS transit will be applied on fec, when 
  * MPLS label binding states initial label (lsp_in) on Label 
  * Switch Path (lsp). 
@@ -1137,23 +1135,20 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * routing decision led to a rtentry(9) with an extended 
  * gateway address (see above), where is therefore accepted 
  * as argument by mpls_output.
- */				
-		if (flags & RTF_STK) 
-			rt->rt_flags |= RTF_STK;
-		else if (flags & RTF_PUSH) {
-
+ */		
 			len = rt->rt_gateway->sa_len - 
 				offsetof(struct sockaddr, sa_data);
 			
-			if (gw->sa_family != rt->rt_gateway->sa_family) {
-				gw->sa_family = rt->rt_gateway->sa_family;
-				bzero(gw->sa_data, SFTN_DATA_LEN);
+			if (sftn.sftn_family != rt->rt_gateway->sa_family) {
+				sftn.sftn_family = rt->rt_gateway->sa_family;
+				bzero(sftn.sftn_data, SFTN_DATA_LEN);
 			}
-			bcopy(rt->rt_gateway->sa_data, gw->sa_data, len);	
+			bcopy(rt->rt_gateway->sa_data, sftn.sftn_data, len);	
 /*
- * Anotate gateway address with MPLS label denotes lsp_in on fec.
+ * Anotate gateway address with < op, lsp_in, rd >.
  */		
-			error = rt_setgate(rt, rt_key(rt), gw);
+			error = rt_setgate(rt, rt_key(rt), 
+				(struct sockaddr *)&sftn);
 			if (error == 0) {
 				rt->rt_mtu -= MPLS_HDRLEN;
 				rt->rt_flags |= RTF_MPE;

@@ -170,21 +170,21 @@ int 	mpls_rt_output_fib(struct rt_msghdr *, struct rt_addrinfo *,
  *  o RTAX_GATEWAY holds by sockaddr_ftn{} for MPLS label
  *    binding necessary 
  *
- *      < seg_i , seg_j > 
+ *     < seg_i , seg_j > 
  *
  *    tuple where seg_i denotes key for by nhlfe generated ilm, 
  *    Furthermore, seg_j denotes typically upstream label for 
- *    transmission downstream by interface ifp in link-layer. 
+ *    transmission downstream by interface ifp in link-layer.
  *  
  *  o In rt_addrinfo{} Service Primitive (spi) contained flags 
  *    encodes with MPLS label binding linked operation.
  *   
- *    RTF_{POP|PUSH|SWAP} - self expanatory.
+ *     RTF_{POP|PUSH|SWAP} - self expanatory.
  *
- *    RTF_MPE, denotes initial label of Label Switch Path.
+ *     RTF_MPE, denotes initial label of Label Switch Path.
  *
- *    RTF_STK, denotes label stacking, but not yet fully
- *    implemented.
+ *     RTF_STK, denotes label stacking, but not yet fully
+ *     implemented.
  */
 int
 mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti, 
