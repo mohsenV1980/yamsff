@@ -1066,7 +1066,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 		sftn.sftn_label = satosftn_label(sa) & MPLS_LABEL_MASK;
 	
 	sftn.sftn_vprd = sftn.sftn_label;
-	bcopy(&sftn, mia->mia_dstaddr, ifa->ifa_addr->sa_len);
+	bcopy(&sftn, mia->mia_dstaddr, sftn.sftn_len);
 /*
  * Map in-segment.
  */
