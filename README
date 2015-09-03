@@ -190,13 +190,9 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                   
                   rtsock.c
 
-                             (a) Accessing AF_MPLS domain by mpls_rt_output
-                                 during rt_output in AF_ROUTE domain.
+                            Access AF_MPLS domain by mpls_rt_output
+                            during rt_output in AF_ROUTE domain.
 
-                             (b) Proxyfied creation or deletion of nhlfe by 
-                                 mpls_newaddrmsg during control oprations
-                                 in AF_MPLS domain
-       
                  netgraph/   
                  
                   Integration of if_vether(4) in AF_NETGRAPH domain.
