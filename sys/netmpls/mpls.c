@@ -912,6 +912,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
  */	
 		IF_AFDATA_WLOCK(ifp);
 		if (MPLS_IFINFO_IFA(ifp) != NULL) {
+			ifa_free(MPLS_IFINFO_IFA(ifp));
 			MPLS_IFINFO_IFA(ifp) = NULL;
 			ifp->if_flags &= ~IFF_MPE;
 		}
@@ -1096,7 +1097,8 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * caused by SIOC[AS]IFADDR control operation.
  */		
 		IF_AFDATA_WLOCK(ifp);
-		MPLS_IFINFO_IFA(ifp) = miatoifa(mia);
+		ifa_ref(&mia->mia_ifa);
+		MPLS_IFINFO_IFA(ifp) = &mia->mia_ifa;
 		ifp->if_flags |= IFF_MPE;	
 		IF_AFDATA_WUNLOCK(ifp);		
 	
