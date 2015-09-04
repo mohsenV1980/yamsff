@@ -326,11 +326,26 @@ Necessary precondition is a workstation running at least FreeBSD 10.1-RELEASE.
  
 How to Compile?
 ---------------
-               
-               
-               
-                  
-           ... to be continued.                 
-                             
 
+Kernel configuration file, e. g. still residing in /usr/src/sys/<arch>/conf, 
+schould be extended by 
+
+   options 	MPLS
+   options 	MPLS_DEBUG
+   device 		if_bridge
+   device  	if_mpe
+
+for enabling AF_MPLS domain. 
+
+   options 	PPPOE_PFIL
+   device 		if_vether
+
+enables if_vether(4) and handoff rfc-2516 based frames throught by pfil(9)
+implemented iap where is defined in if_bridge(4) by bridge_pfil function.  
+
+   (a) cd /usr/src
+   
+   (b) make kernel KERNCONF=CUSTOM_KERNEL_CONFIGURATION_FILE
+   
+compiles and installs (extended) operating system kernel.   
 

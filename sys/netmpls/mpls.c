@@ -1034,7 +1034,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	case RTF_SWAP:
 		break;
 	default:			
-		error = EINVAL;
+		error = EOPNOTSUPP;
 		goto out;
 	}
 	fmsk |= (flags & RTF_STK) ? RTF_STK : RTF_MPE;	

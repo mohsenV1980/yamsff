@@ -255,7 +255,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	}
  	error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
 	
-	if (cmd  == SIOCGIFADDR) {
+	if (if (error == 0 && cmd == SIOCGIFADDR) {
 /*
  * Fetch ilm, if fec does not denote ingress route by lsp_in.
  */		
