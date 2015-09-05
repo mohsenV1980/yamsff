@@ -525,18 +525,18 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 void	
 mpls_purgeaddr(struct ifaddr *ifa)
 {	
+	struct rtentry *fec = NULL;
+	struct sockaddr_ftn sftn;
 	struct mpls_ifaddr *mia;
 	struct ifnet *ifp;
-	struct ifaddr *oifa;
-	struct rtentry *fec;
+	struct sockaddr *x;
+	struct sockaddr *gw;
+	size_t len;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
-	oifa = NULL;
-	fec = NULL;
-	
 	KASSERT((ifa != NULL), ("Invalid argument"));
 	
 	if ((ifa->ifa_flags & IFA_NHLFE) == 0)
@@ -545,22 +545,28 @@ mpls_purgeaddr(struct ifaddr *ifa)
 	mia = ifatomia(ifa);
 	ifp = mia->mia_ifp;
 	
-	ifa_ref(mia->mia_x);
-	oifa = mia->mia_x;
+	x = mia->mia_dstaddr;
+	gw = mia->mia_x->ifa_addr;
 	
-	KASSERT((ifp != NULL), ("Can't assign requested address"));
-	KASSERT((oifa != NULL), ("Can't assign requested address"));
+	bzero(&sftn, sizeof(sftn));
+	sftn.sftn_len = gw->sa_len;
+	sftn.sftn_family = x->sa_family;
 	
-	fec = rtalloc1_fib(oifa->ifa_addr, 0, 0UL, 0);
-	if ((fec == NULL) 		
-		|| (fec->rt_gateway == NULL) 
-		|| (fec->rt_ifp == NULL)
-		|| (fec->rt_ifa == NULL) 
-		|| ((fec->rt_flags & RTF_UP) == 0))
-		goto out;
+	len = gw->sa_len - offsetof(struct sockaddr, sa_data);
+	bcopy(gw->sa_data, sftn.sftn_data, len);	
+	x = (struct sockaddr *)&sftn;
 	
+	fec = rtalloc1_fib(x, 0, 0UL, 0);
+	if (fec != NULL) {		
+		if ((fec->rt_gateway == NULL) 
+			|| (fec->rt_ifp != ifp)
+			|| (fec->rt_ifa == NULL) 
+			|| ((fec->rt_flags & RTF_UP) == 0)) 
+			goto out;
+	}
+		
 	if (mpls_ifscrub(ifp, mia, fec) != 0)
-		goto out;
+		goto out;		
 /*
  * Dequeue nhlfe.
  */	
@@ -569,18 +575,15 @@ mpls_purgeaddr(struct ifaddr *ifa)
 	IF_ADDR_WUNLOCK(ifp);
 		
 	ifa_free(ifa);
-	
+		
 	MPLS_IFADDR_WLOCK();
 	TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
 	MPLS_IFADDR_WUNLOCK();
-	
-	ifa_free(ifa);
-out:	
+
+	ifa_free(ifa);		
+out:
 	if (fec != NULL) 
 		RTFREE_LOCKED(fec);
-
-	if (oifa != NULL)
-		ifa_free(oifa);
 }
 
 /*
@@ -1005,6 +1008,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 {
 	int omsk = RTF_MPLS_OMASK, fmsk = RTF_MPLS; 
 	struct ifaddr *ifa = NULL;
+	struct sockaddr *gw = NULL;
 	struct sockaddr_ftn sftn;
 	size_t len;
 	int error;
@@ -1040,6 +1044,10 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	fmsk |= (flags & RTF_STK) ? RTF_STK : RTF_MPE;	
 	flags = (flags & fmsk);	
 /*
+ * Apply flags and inclusion mapping on fec.
+ */	
+	mia->mia_rt_flags = flags;	
+/*
  * Prepare storage for gateway address and < op, seg_out, rd >.	
  */
 	if (rt == NULL) 
@@ -1047,17 +1055,29 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	else
 		ifa = rt->rt_ifa;
 		
+	ifa_ref(ifa);	
+/*
+ * XXX; ugly... but I'll reimplement this...
+ */		
 	ifa_ref(ifa);
-	
-	bzero(&sftn, sizeof(sftn));
-	sftn.sftn_len = sizeof(sftn);
-	sftn.sftn_family = ifa->ifa_addr->sa_family;
-	
-	len = (ifa->ifa_addr->sa_len - offsetof(struct sockaddr, sa_data));
-	bcopy(ifa->ifa_addr->sa_data, sftn.sftn_data, len);	
+	mia->mia_x = ifa;
+
+	ifa->ifa_rtrequest = mpls_link_rtrequest;
 /*
  * Map out-segment.
  */		
+	if (rt == NULL) 
+		gw = ifa->ifa_addr;
+	else
+		gw = rt_key(rt);
+	
+	bzero(&sftn, sizeof(sftn));
+	sftn.sftn_len = sizeof(sftn);
+	sftn.sftn_family = gw->sa_family;
+	
+	len = gw->sa_len - offsetof(struct sockaddr, sa_data);
+	bcopy(gw->sa_data, sftn.sftn_data, len);	
+	
 	sftn.sftn_op = flags & RTF_MPLS_OMASK;
 	
 	if (flags & RTF_PUSH)  
@@ -1072,18 +1092,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  */
 	mia->mia_addr->sa_len = SMPLS_LEN;
 	mia->mia_addr->sa_family = AF_MPLS;
-	satosmpls_label(mia->mia_addr) = satosmpls_label(sa) & MPLS_LABEL_MASK;
-/*
- * Apply flags and inclusion mapping on fec.
- */	
-	mia->mia_rt_flags = flags;	
-/*
- * XXX; ugly... but I'll reimplement this...
- */		
-	ifa_ref(ifa);
-	mia->mia_x = ifa;
-
-	ifa->ifa_rtrequest = mpls_link_rtrequest;	
+	satosmpls_label(mia->mia_addr) = satosmpls_label(sa) & MPLS_LABEL_MASK;	
 /*
  * Create llentry{} by SIOCSIFADDR triggered inclusion mapping.
  */		
@@ -1138,19 +1147,19 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * gateway address (see above), where is therefore accepted 
  * as argument by mpls_output.
  */		
-			len = rt->rt_gateway->sa_len - 
-				offsetof(struct sockaddr, sa_data);
+			gw = rt->rt_gateway;
+			len = gw->sa_len - offsetof(struct sockaddr, sa_data);
 			
-			if (sftn.sftn_family != rt->rt_gateway->sa_family) {
-				sftn.sftn_family = rt->rt_gateway->sa_family;
+			if (sftn.sftn_family != gw->sa_family) {
+				sftn.sftn_family = gw->sa_family;
 				bzero(sftn.sftn_data, SFTN_DATA_LEN);
 			}
-			bcopy(rt->rt_gateway->sa_data, sftn.sftn_data, len);	
+			bcopy(gw->sa_data, sftn.sftn_data, len);
+			gw = (struct sockaddr *)&sftn;	
 /*
  * Anotate gateway address with < op, lsp_in, rd >.
  */		
-			error = rt_setgate(rt, rt_key(rt), 
-				(struct sockaddr *)&sftn);
+			error = rt_setgate(rt, rt_key(rt), gw);
 			if (error == 0) {
 				rt->rt_mtu -= MPLS_HDRLEN;
 				rt->rt_flags |= RTF_MPE;
