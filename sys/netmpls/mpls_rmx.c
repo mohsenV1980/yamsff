@@ -250,8 +250,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	case RTM_GET:
 /*
  * Fetch Incoming Label Map (ilm) by MPLS label binding on fec.
- */	
-		ifra.ifra_seg.sftn_len = SMPLS_LEN;
+ */
 		cmd = SIOCGIFADDR;
 		break;
 	default:
