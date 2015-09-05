@@ -466,6 +466,7 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 #endif /* MPLS_DEBUG */
 
 	RT_LOCK_ASSERT(fec);
+	RT_UNLOCK(fec);
 	TAILQ_INIT(&hd);
 	ifp = fec->rt_ifp;
 
@@ -502,24 +503,7 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 		while (!TAILQ_EMPTY(&hd)) {
 			ib = TAILQ_FIRST(&hd);
 			
-			if (mpls_ifscrub(ifp, ifatomia(ifa), fec) == 0) {
-/*
- * Dequeue nhlfe.
- */	
-				IF_ADDR_WLOCK(ifp);
-				TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
-				IF_ADDR_WUNLOCK(ifp);
-		
-				ifa_free(ifa);
-		
-				MPLS_IFADDR_WLOCK();
-				TAILQ_REMOVE(&mpls_ifaddrhead, 
-					ifatomia(ifa), mia_link);	
-				MPLS_IFADDR_WUNLOCK();
-
-				ifa_free(ifa);	
-			}
-			TAILQ_REMOVE(&hd, ib, ib_chain);
+			mpls_purgeaddr(ib->ib_nhlfe);
 			
 			ifa_free(ib->ib_nhlfe);
 			ib->ib_nhlfe = NULL;
@@ -530,6 +514,7 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 	default:
 		break;
 	}			
+	RT_LOCK(fec);
 	fec->rt_mtu = ifp->if_mtu;
 }
 
