@@ -483,8 +483,7 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 			if ((ifa->ifa_flags & IFA_NHLFE) == 0)
 				continue;
 				
-			if (mpls_sa_equal(rt_key(fec), 
-				(struct sockaddr *)&mpls_x(ifa)) == 0)
+			if (mpls_sa_equal(rt_key(fec), ifa->ifa_dstaddr) == 0)
 				continue;
 	
 			ifa_ref(ifa);
@@ -503,8 +502,23 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 		while (!TAILQ_EMPTY(&hd)) {
 			ib = TAILQ_FIRST(&hd);
 			
-			mpls_purgeaddr(ib->ib_nhlfe);     	 	
-			
+			if (mpls_ifscrub(ifp, ifatomia(ifa), fec) == 0) {
+/*
+ * Dequeue nhlfe.
+ */	
+				IF_ADDR_WLOCK(ifp);
+				TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
+				IF_ADDR_WUNLOCK(ifp);
+		
+				ifa_free(ifa);
+		
+				MPLS_IFADDR_WLOCK();
+				TAILQ_REMOVE(&mpls_ifaddrhead, 
+					ifatomia(ifa), mia_link);	
+				MPLS_IFADDR_WUNLOCK();
+
+				ifa_free(ifa);	
+			}
 			TAILQ_REMOVE(&hd, ib, ib_chain);
 			
 			ifa_free(ib->ib_nhlfe);
