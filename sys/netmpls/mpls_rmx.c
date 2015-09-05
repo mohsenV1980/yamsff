@@ -191,7 +191,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		struct rtentry **rt, u_int fibnum)
 { 		
 	struct mpls_aliasreq ifra;
-	struct ifaddr *ifa = NULL; 
+	struct rtentry *fec = NULL;
 	struct ifnet *ifp;
 	int error, cmd;
 	
@@ -199,18 +199,12 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
-	bzero(&ifra, sizeof(ifra));
-/*
- * Fetch interface.
- */		
 	if (rti_dst(rti)->sa_len > sizeof(ifra.ifra_x)) {
 		log(LOG_INFO, "%s: destination x in fec invalid\n", __func__);
 		error = EMSGSIZE;
 		goto out;
 	}
-	ifa = ifa_ifwithaddr(rti_dst(rti));
- 	ifp = (ifa != NULL) ? ifa->ifa_ifp : NULL; 
- 
+	
 	if (rti_gateway(rti)->sa_family != AF_MPLS) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
 		error = EINVAL;
@@ -222,13 +216,13 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
+	bzero(&ifra, sizeof(ifra));
+	
 	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);
 	bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
 	
 	ifra.ifra_flags = rti_flags(rti);
-/*
- * Perform MPLS control operations on interface-layer.
- */	
+
  	switch ((int)rtm->rtm_type) {
 	case RTM_ADD:	
 /*
@@ -253,9 +247,25 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EOPNOTSUPP;
 		goto out;
 	}
+/*
+ * Fetch interface by Forward Equivalence Class (fec).
+ */	
+ 	fec = rtalloc1_fib((struct sockaddr *)&ifra.ifra_x, 0, 0UL, 0);
+	if ((fec == NULL) 		
+		|| (fec->rt_gateway == NULL) 
+		|| ((ifp = fec->rt_ifp) == NULL)
+		|| (fec->rt_ifa == NULL) 
+		|| ((fec->rt_flags & RTF_UP) == 0)) {
+		error = ESRCH;
+		goto out;
+	}
+	RT_UNLOCK(fec); 
+/*
+ * Perform MPLS control operations on interface-layer.
+ */		
  	error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
 	
-	if (if (error == 0 && cmd == SIOCGIFADDR) {
+	if (error == 0 && cmd == SIOCGIFADDR) {
 /*
  * Fetch ilm, if fec does not denote ingress route by lsp_in.
  */		
@@ -265,9 +275,10 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		
 		error = (*rt == NULL) ? EADDRNOTAVAIL : error;	
 	}
+	RT_LOCK(fec); 
 out:	
-	if (ifa != NULL)
-		ifa_free(ifa);
+	if (fec != NULL) 
+		RTFREE_LOCKED(fec);
 	
 	return (error);
 }
