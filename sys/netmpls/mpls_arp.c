@@ -93,12 +93,6 @@
 
 #include <netmpls/mpls.h>
 
-extern struct ifaddr * 	mpls_ifaof_ifpforlspdst(struct sockaddr *, 
-	struct sockaddr *, struct ifnet *, int);
-extern struct ifaddr * 	mpls_ifaof_ifpforlsp(struct sockaddr *, 
-	struct ifnet *, int);
-extern struct ifaddr * 	mpls_ifawithlsp_fib(struct sockaddr *, u_int, int);
-
 extern int 	mpls_ip_checkbasic(struct mbuf **);
 #ifdef INET6
 extern int 	mpls_ip6_checkbasic(struct mbuf **);
@@ -554,19 +548,60 @@ mpls_arpinput(struct mbuf *m)
 		
 		drop = 0;
 		break;		
-	case ARPOP_REPLY:
-		gw = (struct sockaddr *)&seg;
+	case ARPOP_REPLY:	
 /* 
  * Received by Alice. Identify particular lsp (upstream).
  */	
-		mro->mro_ifa = mpls_ifaof_ifpforlsp(gw, ifp0, 1);
-		if (mro->mro_ifa == NULL)
-			mro->mro_ifa = mpls_ifawithlsp_fib(gw, M_GETFIB(m), 1);
-
+		IF_ADDR_RLOCK(ifp0);
+		TAILQ_FOREACH(mro->mro_ifa, 
+			&ifp0->if_addrhead, ifa_link) {
+	
+			if ((mro->mro_ifa->ifa_flags & IFA_NHLFE) == 0)
+				continue;
+		
+			if (satosftn_label(mro->mro_ifa->ifa_dstaddr) 
+				== seg->smpls_label) {
+				ifa_ref(mro->mro_ifa);	 
+				break;
+			}
+		}
+		IF_ADDR_RUNLOCK(ifp0);
+		
+		if (mro->mro_ifa == NULL) {
+			IFNET_RLOCK_NOSLEEP();
+			TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
+		
+				if ((ifp->if_flags & IFF_MPLS) == 0)
+					continue;
+		
+				if ((M_GETFIB(m) != RT_ALL_FIBS) 
+					&& (ifp->if_fib != M_GETFIB(m)))
+					continue;
+			
+				IF_ADDR_RLOCK(ifp);
+				TAILQ_FOREACH(mro->mro_ifa, 
+					&ifp->if_addrhead, ifa_link) {
+			
+					if ((mro->mro_ifa->ifa_flags & IFA_NHLFE) == 0)
+						continue;
+			
+					if (satosftn_label(mro->mro_ifa->ifa_dstaddr) 
+						== seg->smpls_label) {
+						ifa_ref(mro->mro_ifa);
+						IF_ADDR_RUNLOCK(ifp);
+						goto found;
+					}
+				}
+				IF_ADDR_RUNLOCK(ifp);
+			}
+			mro->mro_ifa = NULL;
+found:
+			IFNET_RUNLOCK_NOSLEEP();
+		}
 		if (mro->mro_ifa == NULL)
 			break;
-
-		flags = LLE_EXCLUSIVE;
+		
+		gw = (struct sockaddr *)&seg;
 
 		IF_AFDATA_LOCK(ifp0);
 		mro->mro_lle = lla_lookup(MPLS_LLTABLE(ifp0), flags, gw);
@@ -737,23 +772,39 @@ mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
 /*
  * Locate nhlfe on by fec used interface, if any.
  */	
-	mro->mro_ifa = mpls_ifaof_ifpforlspdst(seg, x, ifp, 1);
+	IF_ADDR_RLOCK(ifp);
+	TAILQ_FOREACH(mro->mro_ifa, &ifp->if_addrhead, ifa_link) {
+	
+		if ((mro->mro_ifa->ifa_flags & IFA_NHLFE) == 0)
+			continue;
+		
+		if (mpls_sa_equal(x, mro->mro_ifa->ifa_dstaddr) == 0)
+			continue;
+		
+		if (satosftn_label(mro->mro_ifa->ifa_dstaddr) 
+			== satosmpls_label(seg))  {
+			ifa_ref(mro->mro_ifa);
+			break;
+		}
+	}
+	IF_ADDR_RUNLOCK(ifp);
+	
 	if (mro->mro_ifa == NULL) 
 		goto bad;
-		
+/*
+ * X-connect.
+ */	
+ 	mpls_lle(mro->mro_ifa) = lle;
+	ifa_free(mro->mro_ifa);
+	gw = seg;
+ 		
 #ifdef MPLS_DEBUG
 	(void)printf("%s: seg: %d -> %*D on %s\n", __func__, 
 		satosmpls_label_get(x),
 		ifp->if_addrlen, (u_char *)&lle->ll_addr.mac16, ":", 
 		if_name(ifp));
 #endif /* MPLS_DEBUG */
-		
-/*
- * X-connect.
- */	
-	mpls_lle(mro->mro_ifa) = lle;
-	ifa_free(mro->mro_ifa);
-	gw = seg;
+	
 done:	
 	(void)(*ifp->if_output)(ifp, m, gw, NULL);
 out:
