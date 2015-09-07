@@ -205,7 +205,25 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
-
+	bzero(&ifra, sizeof(ifra));
+	
+	seg = (struct sockaddr *)&ifra.ifra_seg;
+	x = (struct sockaddr *)&ifra.ifra_x;
+	
+	bcopy(rti_dst(rti), x, rti_dst(rti)->sa_len);
+/*
+ * Fetch interface by Forward Equivalence Class (fec).
+ */	
+ 	fec = rtalloc1_fib(x, 0, 0UL, 0);
+	if ((fec == NULL) 		
+		|| (fec->rt_gateway == NULL) 
+		|| ((ifp = fec->rt_ifp) == NULL)
+		|| (fec->rt_ifa == NULL) 
+		|| ((fec->rt_flags & RTF_UP) == 0)) {
+		error = ESRCH;
+		goto out;
+	}	
+	
 	if (rti_gateway(rti)->sa_family != AF_MPLS) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
 		error = EINVAL;
@@ -217,13 +235,8 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
-	bzero(&ifra, sizeof(ifra));
+
 	
-	seg = (struct sockaddr *)&ifra.ifra_seg;
-	x = (struct sockaddr *)&ifra.ifra_x;
-	
-	bcopy(rti_dst(rti), x, rti_dst(rti)->sa_len);
- 	
  	switch ((int)rtm->rtm_type) {
 	case RTM_ADD:	
 /*
@@ -238,8 +251,16 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  * Delete MPLS label binding on fec.
  */	
 		cmd = (cmd == 0) ? SIOCDIFADDR : cmd;
-		
+	
 		bcopy(rti_gateway(rti), seg, rti_gateway(rti)->sa_len);
+		ifra.ifra_flags = rti_flags(rti);
+		
+		RT_UNLOCK(fec); 
+/*
+ * Perform MPLS control operations on interface-layer.
+ */		
+ 		error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
+		RT_LOCK(fec); 
 		break;
 	case RTM_GET:
 /*
@@ -250,42 +271,16 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		seg->sa_len = SMPLS_LEN;
 		seg->sa_family = AF_MPLS;
 		satosmpls_label(seg) = satosmpls_label(rti_gateway(rti));
+		
+		*rt = ((ifra.ifra_flags & RTF_MPE) == 0) 
+			? rtalloc1_fib(seg, 0, 0UL, 0) : NULL;	
+		error = (*rt == NULL) ? EADDRNOTAVAIL : 0;
 		break;
 	default:
 		log(LOG_INFO, "%s: command invalid\n", __func__);		
 		error = EOPNOTSUPP;
-		goto out;
+		break;
 	}	
-	ifra.ifra_flags = rti_flags(rti);
-/*
- * Fetch interface by Forward Equivalence Class (fec).
- */	
- 	fec = rtalloc1_fib(x, 0, 0UL, 0);
-	if ((fec == NULL) 		
-		|| (fec->rt_gateway == NULL) 
-		|| ((ifp = fec->rt_ifp) == NULL)
-		|| (fec->rt_ifa == NULL) 
-		|| ((fec->rt_flags & RTF_UP) == 0)) {
-		error = ESRCH;
-		goto out;
-	}	
-	RT_UNLOCK(fec); 
-/*
- * Perform MPLS control operations on interface-layer.
- */		
- 	error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
-	
-	if (cmd == SIOCGIFADDR) {
-/*
- * Fetch ilm, if fec does not denote ingress route by lsp_in.
- */		
-		if ((ifra.ifra_flags & RTF_MPE) == 0) 
-			*rt = rtalloc1_fib((struct sockaddr *)&ifra.ifra_seg, 
-				0, 0UL, 0);	
-		
-		error = (*rt == NULL) ? EADDRNOTAVAIL : error;	
-	}
-	RT_LOCK(fec); 
 out:	
 	if (fec != NULL) 
 		RTFREE_LOCKED(fec);
