@@ -1011,7 +1011,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * routing decision led to a rtentry(9) with an extended 
  * gateway address (see above), where is therefore accepted 
  * as argument by mpls_output.
- */		
+ */
 			gw = rt->rt_gateway;
 			len = gw->sa_len - offsetof(struct sockaddr, sa_data);
 			

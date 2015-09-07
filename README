@@ -13,7 +13,7 @@ Ongoing operational tasks:
  o Starting of tasks for IPv6 integration.
  o Manual pages and misc. documentation.
  o Fixes targeting my bad orthography.
- o Transition integraiton from 10.1 to 10.2. 
+ o Transition from 10.1 to 10.2. 
  o Establishing full rfc-3031 and rfc-3032 conformancy.
 
 Additional information about contacting
@@ -61,12 +61,7 @@ NOTE: This software and its components are under active developement and far
 NOTE: from correctness and containing (some serious) flaws implecitely.
 NOTE:        
 NOTE: Purpose of this operation is to teach myself about MPLS for a better 
-NOTE: understanding.   
-NOTE: 
-NOTE: Please contact me (see above) and help me, if I have applied copyright 
-NOTE: notices (linked with my name) on files in this repository in a wrong way. 
-NOTE:
-NOTE: I am inexperienced and I will avoid any trouble about licensing issues.   
+NOTE: understanding. 
 NOTE:        
 NOTE: Stern warning: Do not use this software in production environments!
 
@@ -120,7 +115,7 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                                  
                              (b) Inspecting frames originating AF_MPLS. 
                               
-                            Only by frames containing IPv[4|6] datagrams  
+                            Only by frames containing IPv{4|6} datagrams  
                             are processed by pfil(9).  
                               
                   if_bridgevar.h
@@ -222,8 +217,7 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                             By ioctl(2) accessible generic control operations.
                             
                              (a) MPLS label assignement / removal scoped
-                                 on interface layer (aggregate set of 
-                                 routes).
+                                 on interface layer.
                                  
                              (b) Attachment / detachement of link layer
                                  interfaces on instances of if_mpe(4).
