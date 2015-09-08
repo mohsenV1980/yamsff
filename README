@@ -2,7 +2,10 @@ Yet another MPLS stack for FreeBSD (yamsff)
 ===========================================
 
 This software is derived from MPLS implementation in OpenBSD 4.7 release.
-     
+ 
+ o http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/sys/netmpls/
+ o http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/sys/net/if_mpe.c
+ 
 Ongoing operational tasks:
 --------------------------
  
@@ -115,7 +118,7 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                                  
                              (b) Inspecting frames originating AF_MPLS. 
                               
-                            Only by frames containing IPv{4|6} datagrams  
+                            Only frames containing IPv{4|6} datagrams  
                             are processed by pfil(9).  
                               
                   if_bridgevar.h
@@ -348,13 +351,13 @@ MPLS label binding
 
 There exists basically two partitions for MPLS label bindings. 
  
- (a) Per-interface MPLS label space, where by ifnet(9) implemented 
-     network interface maps to MPLS label binding, where any for 
-     transmission accepted Protocol Data Unit still encapsulated 
-     by associated MPLS label.
+ (a) Per-interface MPLS label space, aggregate set of routes.   
      
- (b) MPLS label space where any element maps to unique fec, where 
-     ...
+ (b) MPLS label space where any element maps to unique fec. 
+     
+
+
+
  
  
  ... to be continued.

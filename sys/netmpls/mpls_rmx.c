@@ -235,23 +235,22 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
-
 	
  	switch ((int)rtm->rtm_type) {
 	case RTM_ADD:	
+	
+		cmd = SIOCAIFADDR;
 /*
  * Apply MPLS label binding on Forward Equivalence Class (fec).
  */			
-		cmd = SIOCAIFADDR;
-
 				/* FALLTHROUGH */
 
 	case RTM_DELETE:
+
+		cmd = (cmd == 0) ? SIOCDIFADDR : cmd;
 /*
  * Delete MPLS label binding on fec.
  */	
-		cmd = (cmd == 0) ? SIOCDIFADDR : cmd;
-	
 		bcopy(rti_gateway(rti), seg, rti_gateway(rti)->sa_len);
 		ifra.ifra_flags = rti_flags(rti);
 		
