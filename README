@@ -409,10 +409,10 @@ where
        flags: <UP,GATEWAY,HOST,DONE,STATIC>
  
 in conjunction with former ifconfig output still shows that any by protocol 
-layer delivered Service Data Unit (sdu) in introduced foc still passes em1, 
-if those are encapsulated within by service requesting link layer generated 
-Protocol Data Unit (pdu) during e. g. ether_output, where its implementation 
-resides in net/if_ethersubr.c.
+layer delivered Service Data Unit (sdu) in set of packets on introduced fec 
+still passes em1, if those are encapsulated within by service requesting link 
+layer generated Protocol Data Unit (pdu) during e. g. ether_output, where its 
+implementation resides in net/if_ethersubr.c.
  
  
  ... to be continued.
