@@ -327,15 +327,15 @@ How to Compile?
 Kernel configuration file, e. g. still residing in /usr/src/sys/<arch>/conf, 
 schould be extended by 
 
-   options 	MPLS
-   options 	MPLS_DEBUG
-   device 		if_bridge
-   device  	if_mpe
+   options     MPLS
+   options     MPLS_DEBUG
+   device         if_bridge
+   device      if_mpe
 
 for enabling AF_MPLS domain and
 
-   options 	PPPOE_PFIL
-   device 		if_vether
+   options     PPPOE_PFIL
+   device         if_vether
 
 enables if_vether(4) and handoff rfc-2516 based frames throught by pfil(9)
 implemented iap where is defined in if_bridge(4) by bridge_pfil function.  
@@ -352,13 +352,46 @@ MPLS label binding
 There exists basically two partitions for MPLS label bindings. 
  
  (a) Per-interface MPLS label space, aggregate set of routes.   
-     
+          
  (b) MPLS label space where any element maps to unique fec. 
      
+Basically, any MPLS label binding is implemented by Forward
+Equivalence Class (fec) enclosed from ifaddr(9) derived 
 
-
-
+    struct mpls_ifaddr {
+        struct ifaddr     mia_ifa;        /* protocol-independent info */
+    #define mia_addr     mia_ifa.ifa_addr
+    #define mia_netmask     mia_ifa.ifa_netmask
+    #define mia_dstaddr     mia_ifa.ifa_dstaddr
+    #define mia_ifp     mia_ifa.ifa_ifp    
+    #define mia_flags     mia_ifa.ifa_flags
+    #define mia_metric     mia_ifa.ifa_metric
+        TAILQ_ENTRY(mpls_ifaddr)    mia_link;
+    
+        struct sockaddr_ftn     mia_seg; /* seg_i */
+        struct sockaddr_ftn     mia_nh;     /* < x, op, seg_j, rd > */
+    
+        int     mia_rt_flags;
+        
+        struct ifaddr     *mia_x;     /* backpointer for ifaddr(9) on fec */
+        struct llentry     *mia_lle;     /* shortcut */    
+    };
  
+Next Hop Label Forwarding Entry (nhlfe). Due to ifaddr(9), any nhlfe will be 
+associated with an by ifnet(9) implemented interface still remaining in MPLS
+enabled state.
+
+ # ifconfig em1 encap 
+	
+enables the inclusion mapping on AF_MPLS domain when ioctl(2) calls 
+ifhwioctl by SIOCSIFFLAGS Service Primitive (spi). 
  
+ em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS> metric 0 mtu 1500
+	options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
+	ether 08:00:27:19:9b:5b
+	inet 10.0.1.1 netmask 0xffffff00 broadcast 10.0.1.255 
+	media: Ethernet autoselect (1000baseT <full-duplex>)
+	status: active
+
  ... to be continued.
   
