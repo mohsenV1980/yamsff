@@ -377,9 +377,9 @@ Equivalence Class (fec) enclosed from ifaddr(9) derived
         struct llentry     *mia_lle;     /* shortcut */    
     };
  
-Next Hop Label Forwarding Entry (nhlfe). Due to ifaddr(9), any nhlfe will be 
-associated with an by ifnet(9) implemented interface still remaining in MPLS
-enabled state.
+Next Hop Label Forwarding Entry (nhlfe). Due to ifaddr(9), any nhlfe is still
+associated with as ifnet(9) implemented interface remaining in MPLS enabled 
+state.
 
  # ifconfig em1 encap 
     
@@ -392,6 +392,49 @@ ifhwioctl by SIOCSIFFLAGS Service Primitive (spi).
     inet 10.0.1.1 netmask 0xffffff00 broadcast 10.0.1.255 
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
+
+Suppose a set of packets in fec 172.16.1.3/24 by
+
+ # route add -4 172.16.1.3 10.0.1.1
+ 
+where 
+ 
+ # route get -4 172.16.1.3 10.0.1.1
+ 
+ route to: 172.16.1.3
+ destination: 172.16.1.3
+     gateway: 10.0.1.1
+         fib: 0
+   interface: em1
+       flags: <UP,GATEWAY,HOST,DONE,STATIC>
+ 
+in conjunction with former ifconfig output still shows that any by protocol 
+layer delivered Service Data Unit (sdu) still passes em1, if those are
+encapsulated within by service requesting link layer generated Protocol
+Data Unit (pdu) during e. g. ether_output, where its implementation resides
+in net/if_ethersubr.c.
+ 
  
  ... to be continued.
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
   
