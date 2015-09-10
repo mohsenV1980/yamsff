@@ -377,7 +377,7 @@ implementation of
         struct llentry     *mia_lle;     /* shortcut */    
     };
  
-is derived from those of protocol-independet ifaddr(9). Due to ifaddr(9), any 
+is derived from those of protocol-independent ifaddr(9). Due to ifaddr(9), any 
 nhlfe is associated with by ifnet(9) defined generic implematation of network
 interfaces. Call of
 
@@ -456,7 +456,7 @@ in conjunction with SIOCSIFFLAGS Service Primitive (spi).
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
 
-Implecitely, the hardware independent output routine on by ifnet(9) provided
+Implecitely, the hardware-independent output routine on by ifnet(9) provided
 interface abstraction was replaced by
 
     int
@@ -572,7 +572,8 @@ interface abstraction was replaced by
         return (error);
     }
 
-still wrapps up delegated one, Finally by if_afdata[AF_MPLS] referred
+during SIOCSIFFLAGS triggered operation. Finally, the delegated output routine 
+is hooked by if_afdata[AF_MPLS] referred
 
     struct mpls_ifinfo {
         struct lltable        *mii_llt;    
@@ -582,8 +583,8 @@ still wrapps up delegated one, Finally by if_afdata[AF_MPLS] referred
              struct route *);         
     };
 
-contains interface specific MPLS_ARP cache and refers MPLS label bindings
-scoped on interface-layer denotes aggregate set of routes, when
+which stores interface specific MPLS_ARP cache and holds reference on MPLS label 
+bindings scoped on interface-layer denotes aggregate set of routes, when
 
  # ifconfig em1 mpls 100
 
