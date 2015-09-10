@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2014, 2015 Henning Matyschok
+ * Copyright (c) 2015 Henning Matyschok
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -122,12 +122,12 @@ mpls_status(int s __unused, const struct ifaddrs *ifa)
 				|| sdl->sdl_type == IFT_L2VLAN 
 				|| sdl->sdl_type == IFT_BRIDGE) 
 				&& sdl->sdl_alen == ETHER_ADDR_LEN)
-				cq += sprintf(cq, "-> ether %s\n",
+				cq += sprintf(cq, "-> ether %s",
 				    ether_ntoa((struct ether_addr *)LLADDR(sdl)));
 			else {
 				int n = sdl->sdl_nlen > 0 ? sdl->sdl_nlen + 1 : 0;
 	
-				cq += sprintf(cq, "-> link %s\n", link_ntoa(sdl) + n);
+				cq += sprintf(cq, "-> link %s", link_ntoa(sdl) + n);
 			}
 		}		
 		break;

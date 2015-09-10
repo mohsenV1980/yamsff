@@ -349,14 +349,14 @@ compiles and installs (extended) operating system kernel.
 MPLS label binding
 ------------------
 
-There exists basically two partitions for MPLS label bindings. 
+There exists basically two partitions for MPLS label bindings: 
  
  (a) Per-interface MPLS label space, aggregate set of routes.   
           
  (b) MPLS label space where any element maps to unique fec. 
      
-Basically, any MPLS label binding is implemented by Forward
-Equivalence Class (fec) enclosed from ifaddr(9) derived 
+Any MPLS label binding is implemented by fec enclosed nhlfe where the 
+implementation of
 
     struct mpls_ifaddr {
         struct ifaddr     mia_ifa;        /* protocol-independent info */
@@ -377,23 +377,251 @@ Equivalence Class (fec) enclosed from ifaddr(9) derived
         struct llentry     *mia_lle;     /* shortcut */    
     };
  
-Next Hop Label Forwarding Entry (nhlfe). Due to ifaddr(9), any nhlfe is still
-associated with as ifnet(9) implemented interface remaining in MPLS enabled 
-state.
+is derived from those of protocol-independet ifaddr(9). Due to ifaddr(9), any 
+nhlfe is associated with by ifnet(9) defined generic implematation of network
+interfaces. Call of
 
  # ifconfig em1 encap 
     
 enables the inclusion mapping on AF_MPLS domain when ioctl(2) calls 
-ifhwioctl by SIOCSIFFLAGS Service Primitive (spi). 
+
+    static int
+    ifhwioctl(u_long cmd, struct ifnet *ifp, caddr_t data, struct thread *td)
+    {
+        struct ifreq *ifr;
+       
+             ...
+       
+        int error = 0;
+        int new_flags, temp_flags;
+        
+            ...
+            
+        ifr = (struct ifreq *)data;
+        switch (cmd) {
+    
+            ...    
+        
+        case SIOCSIFFLAGS:
+            
+                ...
+            
+            else if (ifp->if_flags & IFF_MPLS &&
+                 (new_flags & IFF_MPLS) == 0) {
+/*
+ * Disable MPLS.
+ */
+                int s = splimp();                
+                if (ifp->if_type == IFT_ETHER
+                    || ifp->if_type == IFT_FDDI
+                    || ifp->if_type == IFT_LOOP) {
+                    ifp->if_output = MPLS_IFINFO(ifp)->mii_output; 
+                    MPLS_IFINFO(ifp)->mii_output = mpls_output;    
+                }    
+                splx(s);
+            } else if (new_flags & IFF_MPLS &&
+                (ifp->if_flags & IFF_MPLS) == 0) {
+/*
+ * Enable MPLS.
+ */
+                int s = splimp();                
+                if (ifp->if_type == IFT_ETHER 
+                    || ifp->if_type == IFT_FDDI
+                    || ifp->if_type == IFT_LOOP) {
+                    MPLS_IFINFO(ifp)->mii_output = ifp->if_output;
+                    ifp->if_output = mpls_output;    
+                }    
+                splx(s);
+            }
+   
+                   ...
+   
+            break;
+        
+            ...    
+
+        default:
+            error = ENOIOCTL;
+            break;
+        }
+        return (error);
+    }
+
+in conjunction with SIOCSIFFLAGS Service Primitive (spi). 
  
- em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS> ...
+ em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS> metric 0 mtu 1500
     options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
     ether 08:00:27:19:9b:5b
     inet 10.0.1.1 netmask 0xffffff00 broadcast 10.0.1.255 
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
 
-Suppose a set of packets in fec 172.16.1.3/24 by
+Implecitely, the hardware independent output routine on by ifnet(9) provided
+interface abstraction was replaced by
+
+    int
+    mpls_output(struct ifnet *ifp, struct mbuf *m, 
+            const struct sockaddr *dst, struct route *ro)
+    {    
+        struct mpls_ro mplsroute;
+        struct mpls_ifinfo *mii;
+        struct mpls_ro *mro;
+        struct sockaddr *nh;
+        struct sockaddr *gw;
+        
+        int error = 0;
+
+        if ((ifp->if_flags & IFF_MPLS) == 0) {
+/*
+ * Any pdu originates MPLS-layer are looped back into its 
+ * domain, if for transmission used interface cannot accept 
+ * by MPLS-layer processed pdu.
+ *
+ * See net/if_ethersubr.c and net/if_loop.c for further details.
+ */
+            if (dst->sa_family == AF_MPLS) 
+                if_simloop(ifp, m, dst->sa_family, 0);
+            else 
+                error = (*ifp->if_output)(ifp, m, dst, ro);
+            goto out;
+        }    
+        IF_AFDATA_RLOCK(ifp);
+        mii = MPLS_IFINFO(ifp);
+        IF_AFDATA_RUNLOCK(ifp);
+    
+        mro = &mplsroute;
+        bzero(mro, sizeof(mro));
+    
+        if (ro == NULL) 
+            ro = (struct route *)mro;    
+    
+        if (ro->ro_rt == NULL) {
+            gw = nh = (struct sockaddr *)dst;
+    
+            if (m->m_flags & M_MPLS) {    
+/*
+ * Bypass tagging, if mbuf(9) was cached by MPLS_ARP.
+ */                
+                m->m_flags &= ~M_MPLS;            
+                goto passout;
+            }
+/*
+ * Otherwise, mbuf(9) must pass mpls_encap, if 
+ * interface is bound by MPLS label binding on
+ * per-interface MPLS label space.  
+ */                
+        } else {
+/*
+ * If route exists, three cases are considered:
+ * 
+ *  (a) held route denotes fastpath. 
+ *  (b) held route denotes ilm,
+ *
+ * or
+ *  
+ *  (c) held route originates not AF_MPLS domain.
+ */
+            if (ro->ro_rt->rt_flags & RTF_MPE) { 
+                nh = ro->ro_rt->rt_gateway;
+            
+                if ((m = mpls_encap(m, nh, mro)) == NULL) {
+                    error = ECONNABORTED;
+                    goto done;
+                }
+                gw = (struct sockaddr *)&mro->mro_gw;
+            } else
+                gw = (struct sockaddr *)dst;        
+        } 
+    
+        if (mii->mii_nhlfe != NULL) {
+            mro->mro_ifa = mii->mii_nhlfe;
+            nh = mro->mro_ifa->ifa_dstaddr;
+/*
+ * Per interface MPLS label space.
+ */                    
+            if ((m = mpls_encap(m, nh, mro)) == NULL) {
+                error = ECONNABORTED;
+                goto done;
+            }
+            gw = (struct sockaddr *)&mro->mro_gw;
+        }
+    passout:
+    
+        if (gw->sa_family == AF_MPLS) {
+/* 
+ * Defines iap for pfil(9) processing.
+ */
+            if (PFIL_HOOKED(&V_inet_pfil_hook)
+    #ifdef INET6
+                || PFIL_HOOKED(&V_inet6_pfil_hook)
+    #endif
+            ) {        
+                if (mpls_pfil(&m, ifp, PFIL_OUT) != 0)
+                    goto done;
+                
+                if (m == NULL)
+                    goto done;
+            }
+            m->m_flags &= ~(M_BCAST|M_MCAST);
+        }
+        error = (*mii->mii_output)(ifp, m, gw, ro);    
+    done:    
+        if (mro != NULL)
+            mpls_rtfree(mro);
+    out:    
+        return (error);
+    }
+
+still wrapps up delegated one, Finally by if_afdata[AF_MPLS] referred
+
+    struct mpls_ifinfo {
+        struct lltable        *mii_llt;    
+        struct ifaddr        *mii_nhlfe;   
+        int    (*mii_output)    /* delegation */
+            (struct ifnet *, struct mbuf *, const struct sockaddr *,
+             struct route *);         
+    };
+
+contains interface specific MPLS_ARP cache and refers MPLS label bindings
+scoped on interface-layer denotes aggregate set of routes, when
+
+ # ifconfig em1 mpls 100
+
+was called.
+
+ em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
+    options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
+    ether 08:00:27:19:9b:5b
+    mpls 100 psh -> ether 08:00:27:19:9b:5b
+    inet 10.0.1.1 netmask 0xffffff00 broadcast 10.0.1.255 
+    media: Ethernet autoselect (1000baseT <full-duplex>)
+    status: active
+    
+Any by mpls_output processed sdu will be encapsulated by MPLS label 100 during
+runtime of by mpls_output called mpls_encap, if and only if (iff) service 
+requesting protocol-layer still using em1 for transmitting sdu. 
+
+Due to MPLS label bindings on case (b) any fec is implemented as
+    
+    struct rtentry {
+    `    struct    radix_node rt_nodes[2];    /* tree glue, and other values */
+
+        struct    sockaddr *rt_gateway;    /* value */
+        struct    ifnet *rt_ifp;        /* the answer: interface to use */
+        struct    ifaddr *rt_ifa;        /* the answer: interface address to use */
+        int        rt_flags;    /* up/down?, host/net */
+        int        rt_refcnt;    /* # held references */
+        u_int        rt_fibnum;    /* which FIB */
+        u_long        rt_mtu;        /* MTU for this path */
+        u_long        rt_weight;    /* absolute weight */ 
+        u_long        rt_expire;    /* lifetime for route, e.g. redirect */
+    #define    rt_endzero    rt_pksent
+        counter_u64_t    rt_pksent;    /* packets sent using this route */
+        struct mtx    rt_mtx;        /* mutex for routing entry */
+    };    
+         
+where by route(9) denoted manual pages provides a detailed description on
+implementation. Suppose a set of packets in fec 172.16.1.3/24 by
 
  # route add -4 172.16.1.3 10.0.1.1
  
@@ -410,9 +638,21 @@ where
  
 in conjunction with former ifconfig output still shows that any by protocol 
 layer delivered Service Data Unit (sdu) in set of packets on introduced fec 
-still passes em1, if those are encapsulated within by service requesting link 
-layer generated Protocol Data Unit (pdu) during e. g. ether_output, where its 
-implementation resides in net/if_ethersubr.c.
+still passes em1.
+
+ # route add -4 172.16.1.3 -push 200    
+
+binds MPLS label 200 on fec 172.16.1.3, where any sdu in fec still passing 
+mpls_output will be encapsulated by MPLS label 200.
+
+ em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
+    options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
+    ether 08:00:27:19:9b:5b
+    mpls 200 psh -> 172.16.1.3   
+    mpls 100 psh -> ether 08:00:27:19:9b:5b
+    inet 10.0.1.1 netmask 0xffffff00 broadcast 10.0.1.255 
+    media: Ethernet autoselect (1000baseT <full-duplex>)
+    status: active
  
  
  ... to be continued.
