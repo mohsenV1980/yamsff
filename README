@@ -447,7 +447,7 @@ enables the inclusion mapping on AF_MPLS domain when ioctl(2) calls
         return (error);
     }
 
-in conjunction with SIOCSIFFLAGS Service Primitive (spi). 
+in conjunction with SIOCSIFFLAGS Service Primitive (spi), where 
  
  em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS> metric 0 mtu 1500
     options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
@@ -456,8 +456,8 @@ in conjunction with SIOCSIFFLAGS Service Primitive (spi).
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
 
-Implecitely, the hardware-independent output routine on by ifnet(9) provided
-interface abstraction was replaced by
+the hardware-independent output routine on by ifnet(9) provided interface 
+abstraction was replaced by
 
     int
     mpls_output(struct ifnet *ifp, struct mbuf *m, 
@@ -572,8 +572,8 @@ interface abstraction was replaced by
         return (error);
     }
 
-during SIOCSIFFLAGS triggered operation. Finally, the delegated output routine 
-is hooked by if_afdata[AF_MPLS] referred
+implecitely. Therefore, the delegated output routine, e. g. ether_output was 
+hooked by mii_output on 
 
     struct mpls_ifinfo {
         struct lltable        *mii_llt;    
@@ -583,12 +583,14 @@ is hooked by if_afdata[AF_MPLS] referred
              struct route *);         
     };
 
-which stores interface specific MPLS_ARP cache and holds reference on MPLS 
-label bindings scoped on interface-layer denotes aggregate set of routes, if
+which was allocated by mpls_domifattach during interface initialisation by 
+if_attach called if_attachdomain1. Additionally mpls_ifinfo{} still holds 
+interface specific MPLS_ARP cache and holds reference on MPLS label bindings 
+scoped on interface-layer denotes aggregate set of routes, when call off
 
  # ifconfig em1 mpls 100
 
-was called.
+takes place.
 
  em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
     options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
