@@ -95,17 +95,17 @@ mpls_status(int s __unused, const struct ifaddrs *ifa)
 		(void)snprintf(abuf, MPLS_ADDRBUFSIZ, "%s", 
 			inet_ntoa(((struct sockaddr_in *)
 			ifa->ifa_dstaddr)->sin_addr));
-		cq += sprintf(cq, "-> %s", abuf);
+		cq += sprintf(cq, "-> inet %s", abuf);
 		break;
 	case AF_INET6:
 		(void)inet_ntop(AF_INET6, 
 			&((struct sockaddr_in6 *)
 			ifa->ifa_dstaddr)->sin6_addr, 
 			abuf, MPLS_ADDRBUFSIZ);	
-		cq += sprintf(cq, "-> %s", abuf);
+		cq += sprintf(cq, "-> inet %s", abuf);
 		break;
 	case AF_MPLS: 
-		cq += sprintf(cq, "-> %d (downstream)", 
+		cq += sprintf(cq, "-> mpls %d (downstream)", 
 			ntohl(satosmpls_label(ifa->ifa_dstaddr)) 
 				>> MPLS_LABEL_OFFSET);
 		break;

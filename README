@@ -607,8 +607,8 @@ Due to MPLS label bindings on case (b) any fec is implemented as
     `    struct    radix_node rt_nodes[2];    /* tree glue, and other values */
 
         struct    sockaddr *rt_gateway;    /* value */
-        struct    ifnet *rt_ifp;        /* the answer: interface to use */
-        struct    ifaddr *rt_ifa;        /* the answer: interface address to use */
+        struct    ifnet *rt_ifp;      /* the answer: interface to use */
+        struct    ifaddr *rt_ifa;     /* the answer: interface address to use */
         int        rt_flags;    /* up/down?, host/net */
         int        rt_refcnt;    /* # held references */
         u_int        rt_fibnum;    /* which FIB */
@@ -648,7 +648,7 @@ mpls_output will be encapsulated by MPLS label 200.
  em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
     options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
     ether 08:00:27:19:9b:5b
-    mpls 200 psh -> 172.16.1.3   
+    mpls 200 psh -> inet 172.16.1.3   
     mpls 100 psh -> ether 08:00:27:19:9b:5b
     inet 10.0.1.1 netmask 0xffffff00 broadcast 10.0.1.255 
     media: Ethernet autoselect (1000baseT <full-duplex>)
