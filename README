@@ -583,8 +583,8 @@ is hooked by if_afdata[AF_MPLS] referred
              struct route *);         
     };
 
-which stores interface specific MPLS_ARP cache and holds reference on MPLS label 
-bindings scoped on interface-layer denotes aggregate set of routes, when
+which stores interface specific MPLS_ARP cache and holds reference on MPLS 
+label bindings scoped on interface-layer denotes aggregate set of routes, iff
 
  # ifconfig em1 mpls 100
 
