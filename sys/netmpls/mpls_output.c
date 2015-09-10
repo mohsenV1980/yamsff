@@ -98,7 +98,6 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 	struct mpls_ro mplsroute;
 	struct mpls_ifinfo *mii;
 	struct mpls_ro *mro;
-	struct sockaddr *nh;
 	struct sockaddr *gw;
 	
 	int error = 0;
@@ -132,7 +131,7 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 		ro = (struct route *)mro;	
 	
 	if (ro->ro_rt == NULL) {
-		gw = nh = (struct sockaddr *)dst;
+		gw = (struct sockaddr *)dst;
 	
 		if (m->m_flags & M_MPLS) {	
 /*
@@ -158,9 +157,9 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
  *  (c) held route originates not AF_MPLS domain.
  */
 		if (ro->ro_rt->rt_flags & RTF_MPE) { 
-			nh = ro->ro_rt->rt_gateway;
+			gw = ro->ro_rt->rt_gateway;
 			
-			if ((m = mpls_encap(m, nh, mro)) == NULL) {
+			if ((m = mpls_encap(m, gw, mro)) == NULL) {
 				error = ECONNABORTED;
 				goto done;
 			}
@@ -171,11 +170,11 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 	
 	if (mii->mii_nhlfe != NULL) {
 		mro->mro_ifa = mii->mii_nhlfe;
-		nh = mro->mro_ifa->ifa_dstaddr;
+		gw = mro->mro_ifa->ifa_dstaddr;
 /*
  * Per interface MPLS label space.
  */					
-		if ((m = mpls_encap(m, nh, mro)) == NULL) {
+		if ((m = mpls_encap(m, gw, mro)) == NULL) {
 			error = ECONNABORTED;
 			goto done;
 		}
