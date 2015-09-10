@@ -600,7 +600,7 @@ was called.
     
 Any by mpls_output processed sdu will be encapsulated by MPLS label 100 during
 runtime of by mpls_output called mpls_encap, if and only if (iff) service 
-requesting protocol-layer still using em1 for transmitting sdu. 
+requesting protocol-layer invokes em1 for transmitting sdu. 
 
 Due to MPLS label bindings on case (b) any fec is implemented as
     
