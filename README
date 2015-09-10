@@ -584,7 +584,7 @@ is hooked by if_afdata[AF_MPLS] referred
     };
 
 which stores interface specific MPLS_ARP cache and holds reference on MPLS 
-label bindings scoped on interface-layer denotes aggregate set of routes, iff
+label bindings scoped on interface-layer denotes aggregate set of routes, if
 
  # ifconfig em1 mpls 100
 
