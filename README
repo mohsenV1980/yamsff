@@ -291,61 +291,6 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                    
                   by ipfw(4).
                  
-How to install?
----------------                
-
-Necessary precondition is a workstation running at least FreeBSD 10.1-RELEASE.
-                 
- 1. Create directory for containment of entire source tree.
- 
-     (a) mkdir -p /usr/src                          
-                 
- 2. Fetch this repository into former created directory. 
- 
-     (a) cd /usr/src
- 
-     (b) git clone https://github.com/hmatyschok/yamms .  
- 
- 3. Install source code distribution shipped with installation media, i. e. 
-    stored as image file in /tmp. 
-    
-     (a) cd  /
-    
-     (b) mdconfig -t vnode -f /tmp/FreeBSD-10.1-RELEASE-<arch>-disc1.iso
-    
-     (c) mount_cd9660 /dev/md0 /mnt     
-                     
-     (d) tar xfk /mnt/usr/freebsd-dist/src.txz     
-                 
-     (e) umount /mnt
-    
-     (f) mdconfig -d -u 0
- 
-How to Compile?
----------------
-
-Kernel configuration file, e. g. still residing in /usr/src/sys/<arch>/conf, 
-schould be extended by 
-
-   options     MPLS
-   options     MPLS_DEBUG
-   device         if_bridge
-   device      if_mpe
-
-for enabling AF_MPLS domain and
-
-   options     PPPOE_PFIL
-   device         if_vether
-
-enables if_vether(4) and handoff rfc-2516 based frames throught by pfil(9)
-implemented iap where is defined in if_bridge(4) by bridge_pfil function.  
-
- (a) cd /usr/src
-   
- (b) make kernel KERNCONF=CUSTOM_KERNEL_CONFIGURATION_FILE
-   
-compiles and installs (extended) operating system kernel.   
-
 MPLS label binding
 ------------------
 
@@ -648,8 +593,7 @@ still passes em1.
 
  # route add -4 172.16.1.3 -push 200    
 
-binds MPLS label 200 on fec 172.16.1.3, where any sdu in fec still passing 
-mpls_output will be encapsulated by MPLS label 200.
+binds MPLS label 200 on fec 172.16.1.3,
 
  em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
     options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
@@ -660,16 +604,67 @@ mpls_output will be encapsulated by MPLS label 200.
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
  
+where any sdu in fec still passing mpls_output will be encapsulated by MPLS 
+ingres label 200.
+ 
  
  ... to be continued.
  
  
+How to install?
+---------------                
+
+Necessary precondition is a workstation running at least FreeBSD 10.1-RELEASE.
+                 
+ 1. Create directory for containment of entire source tree.
  
+     (a) mkdir -p /usr/src                          
+                 
+ 2. Fetch this repository into former created directory. 
  
+     (a) cd /usr/src
  
+     (b) git clone https://github.com/hmatyschok/yamms .  
  
+ 3. Install source code distribution shipped with installation media, i. e. 
+    stored as image file in /tmp. 
+    
+     (a) cd  /
+    
+     (b) mdconfig -t vnode -f /tmp/FreeBSD-10.1-RELEASE-<arch>-disc1.iso
+    
+     (c) mount_cd9660 /dev/md0 /mnt     
+                     
+     (d) tar xfk /mnt/usr/freebsd-dist/src.txz     
+                 
+     (e) umount /mnt
+    
+     (f) mdconfig -d -u 0
  
- 
+How to Compile?
+---------------
+
+Kernel configuration file, e. g. still residing in /usr/src/sys/<arch>/conf, 
+schould be extended by 
+
+   options     MPLS
+   options     MPLS_DEBUG
+   device         if_bridge
+   device      if_mpe
+
+for enabling AF_MPLS domain and
+
+   options     PPPOE_PFIL
+   device         if_vether
+
+enables if_vether(4) and handoff rfc-2516 based frames throught by pfil(9)
+implemented iap where is defined in if_bridge(4) by bridge_pfil function.  
+
+ (a) cd /usr/src
+   
+ (b) make kernel KERNCONF=CUSTOM_KERNEL_CONFIGURATION_FILE
+   
+compiles and installs (extended) operating system kernel.   
  
  
  

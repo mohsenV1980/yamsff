@@ -238,11 +238,11 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	
  	switch ((int)rtm->rtm_type) {
 	case RTM_ADD:	
-	
-		cmd = SIOCAIFADDR;
 /*
  * Apply MPLS label binding on Forward Equivalence Class (fec).
- */			
+ */	
+		cmd = SIOCAIFADDR;
+			
 				/* FALLTHROUGH */
 
 	case RTM_DELETE:
