@@ -569,7 +569,7 @@ fec, which are implemented as
         struct mtx    rt_mtx;        /* mutex for routing entry */
     };    
          
-on protocol-layer. For moredetailed description about its implementation, see
+on protocol-layer. For more detailed description about its implementation, see
 by route(9) denoted manual page. 
 
 	Suppose a set of packets in fec 172.16.1.3/24 by
@@ -586,14 +586,16 @@ where
          fib: 0
    interface: em1
        flags: <UP,GATEWAY,HOST,DONE,STATIC>
- 
+  recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
+       0         0         0         0      1500         1         0 
+       
 in conjunction with former ifconfig output still shows that any by protocol 
 layer delivered Service Data Unit (sdu) in set of packets on introduced fec 
 still passes em1.
 
  # route add -4 172.16.1.3 -push 200    
 
-binds MPLS label 200 on fec 172.16.1.3,
+binds MPLS label 200 on fec 172.16.1.3
 
  em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
     options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
@@ -604,9 +606,22 @@ binds MPLS label 200 on fec 172.16.1.3,
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
  
-where any sdu in fec still passing mpls_output will be encapsulated by MPLS 
-ingres label 200.
- 
+and
+
+ # route get -4 172.16.1.3
+
+    route to: 172.16.1.3
+ destination: 172.16.1.3
+     gateway: 10.0.1.1
+         fib: 0
+   interface: em1
+       flags: <UP,GATEWAY,HOST,DONE,STATIC,MPE>
+  recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
+       0         0         0         0      1496         1         0 
+
+indicates fec 172.16.1.3 denotes fastpath into MPLS transit domain, where any 
+sdu in promoted fec still passes mpls_output will be encapsulated by MPLS ingres
+label 200.
  
  ... to be continued.
  

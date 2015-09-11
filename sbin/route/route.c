@@ -1299,7 +1299,7 @@ newroute(int argc, char **argv)
 #ifdef MPLS
 			if (*gateway) 
 				printf("%s %s", (nrflags & F_MPLS) ? 
-					": oseg" : ": gateway",
+					": seg" : ": gateway",
 					gateway);
 #else
 			if (*gateway)
