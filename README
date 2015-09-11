@@ -589,7 +589,7 @@ scoped on interface-layer denotes aggregate set of routes, when call off
 
  # ifconfig em1 mpls 100
 
-takes place.
+invokes by ioctl(2) called mpls_control in conjunction SIOCAIFADDR spi.   
 
  em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
     options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
@@ -598,12 +598,13 @@ takes place.
     inet 10.0.1.1 netmask 0xffffff00 broadcast 10.0.1.255 
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
-    
+
 Any by mpls_output processed sdu will be encapsulated by MPLS label 100 during
 runtime of by mpls_output called mpls_encap, if and only if (iff) service 
 requesting protocol-layer invokes em1 for transmitting sdu. 
-
-Due to MPLS label bindings on case (b) any fec is implemented as
+	
+	The most common case on MPLS label bindings are those where maps to unique
+fec, which are implemented as
     
     struct rtentry {
         struct    radix_node rt_nodes[2];    /* tree glue, and other values */
@@ -623,8 +624,10 @@ Due to MPLS label bindings on case (b) any fec is implemented as
         struct mtx    rt_mtx;        /* mutex for routing entry */
     };    
          
-where by route(9) denoted manual pages provides a detailed description on
-implementation. Suppose a set of packets in fec 172.16.1.3/24 by
+on protocol-layer. For moredetailed description about its implementation, see
+by route(9) denoted manual page. 
+
+	Suppose a set of packets in fec 172.16.1.3/24 by
 
  # route add -4 172.16.1.3 10.0.1.1
  
