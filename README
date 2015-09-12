@@ -675,9 +675,9 @@ data plane was performed.
     |\                                          /|
     | \                               +<-------+ |
     |  \                             /           |
-    |   +<-----------+ if_simloop() +<-----------+ if_output()
+    |   +<-----------+ if_simloop() +<-----------+ ether_output()
     |                                            |
-    + if_input()                                 |
+    + ether_input()                              |
     A                                            |
     |                                            V
  
