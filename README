@@ -729,8 +729,9 @@ to unique fec. On operating system level, a fec is implemented as
     };    
          
 as node in RADIX Trie on domain (e. g. AF_INET) in protocol-layer. For more 
-detailed description about its implementation, see by route(9) denoted manual 
-page. Suppose a set of packets in e. g. 
+detailed description about its implementation, see by route(4) and rtentry(9) 
+denoted manual pages. 
+    Suppose a set of packets in e. g. 
 
    fec 172.16.1.3/24 
 
