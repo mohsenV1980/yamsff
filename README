@@ -516,8 +516,28 @@ abstraction was replaced by
         return (error);
     }
 
-implecitely. Therefore, the delegated output routine, e. g. ether_output was 
-hooked by mii_output on 
+implecitely. 
+
+               rxxx_input() +{ socket layer }+ rxxx_output()
+                           /                  \
+                          /                    \
+       +-->+ xxx_input() +-->+ xxx_forward() +->+ xxx_output()
+      /     \                                    \
+     /       \                                    +
+    +         +<------+                           |
+    |                  \                          v 
+    + mpls_input() +--->+ mpls_forward() +------->+ mpls_output()			
+    |\                                           /|
+    | \                               +<--------+ |
+    |  \                             /            |
+    |   +<-----------+ if_simloop() +<------------+ if_output()
+    |                                             |
+    + if_input()                                  |
+    A                                             |
+    |                                             V
+
+Therefore, the delegated output routine, e. g. ether_output was hooked by 
+mii_output on 
 
     struct mpls_ifinfo {
         struct lltable        *mii_llt;    
@@ -546,8 +566,7 @@ invokes by ioctl(2) called mpls_control in conjunction SIOCAIFADDR spi.
 
 Any by mpls_output processed sdu will be encapsulated by MPLS label 100 during
 runtime of by mpls_output called mpls_encap, if and only if (iff) service 
-requesting protocol-layer invokes em1 for transmitting sdu. 
-    
+requesting protocol-layer invokes em1 for transmitting sdu.
     The most common case on MPLS label bindings are those where maps to unique
 fec, which are implemented as
     
@@ -570,7 +589,10 @@ fec, which are implemented as
     };    
          
 on protocol-layer. For more detailed description about its implementation, see
-by route(9) denoted manual page. Suppose a set of packets in fec 172.16.1.3/24 
+by route(9) denoted manual page. Suppose a set of packets in e. g. 
+
+   fec 172.16.1.3/24 
+
 by
 
  # route add -4 172.16.1.3 10.0.1.1
@@ -590,7 +612,7 @@ where
        
 in conjunction with former ifconfig output still shows that any by protocol 
 layer delivered Service Data Unit (sdu) in set of packets on introduced fec 
-still passes em1.
+still passes em1. Call of 
 
  # route add -4 172.16.1.3 -push 200    
 
@@ -605,29 +627,12 @@ binds MPLS label 200 in conjuction with
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
  
-on fec 172.16.1.3 denotes fastpath into MPLS transit domain. Any transmitted 
-sdu in promoted fec still passes mpls_output will be encapsulated with MPLS 
-ingress label 200.
-    Regarding the implementation of former introduced rtentry(9) denotes fec, 
-fastpath into MPLS transit will be applied through annotation with
+on fec 172.16.1.3. Regarding the implementation of former introduced rtentry(9), 
+fastpath into MPLS transit will be applied through extending it by
 
     < op, lsp_in, rd > 
  
-of gateway address 
- 
-
-        + rt_key               .       + MPLS label (BoS)
-        |                      .       |
-        v                      .       v
-      +-------------+----------+-----+------+------+
-      | 172.16.1.3  | 10.0.1.1 | psh | 200  | VPRD |
-      +-------------+----------+-----+------+------+
-                      A
-                      |
-                      + rt_gateway
-
-on focussed rtentry(9) during runtime of mpls_ifinit (see netmpls/mpls.c) 
-called rt_setgate. The gateway address on fec implementing rtentry(9) will 
+during runtime of mpls_ifinit (see netmpls/mpls.c) called rt_setgate. It will 
 be replaced by an instance of
 
     #define SFTN_DATA_LEN     52
@@ -641,9 +646,21 @@ be replaced by an instance of
     };
     #define SFTN_LEN     (sizeof(struct sockaddr_ftn))
 
-still holding a copy of original gateway address. This avoids a second routing 
-table lookup by service providing MPLS-layer, when handoff by protocol-layer
-processed Message Primitives (mpi) into MPLS data plane was performed. 
+still holding a copy of original gateway address value. 
+
+        + rt_key               .       + MPLS label (BoS)
+        |                      .       |
+        v                      .       v
+      +-------------+----------+-----+------+------+
+      | 172.16.1.3  | 10.0.1.1 | psh | 200  | VPRD |
+      +-------------+----------+-----+------+------+
+                      A
+                      |
+                      + rt_gateway
+
+This avoids a second routing table lookup by service providing MPLS-layer, 
+when handoff by protocol-layer processed Message Primitives (mpi) into MPLS 
+data plane was performed. 
 
 
                rip_input() +{ socket layer }+ rip_output()
@@ -676,9 +693,9 @@ promotes a rtentry(9)
   recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
        0         0         0         0      1496         1         0 
  
-still holding an extended gateway address (see above), which is accepted as 
-argument by mpls_output and used by mpls_encap for encapsulation by MPLS
-ingress label. 
+where its extended gateway address provides the MPLS label value denotes MPLS
+ingress label. Thus, any by mpls_output accepted sdu belonging to fec denotes
+fastpath into AF_MPLS domain will be encapsulated by mpls_encap.  
 
 
  ... to be continued.
