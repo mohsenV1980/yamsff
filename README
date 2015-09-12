@@ -547,8 +547,8 @@ invokes by ioctl(2) called mpls_control in conjunction SIOCAIFADDR spi.
 Any by mpls_output processed sdu will be encapsulated by MPLS label 100 during
 runtime of by mpls_output called mpls_encap, if and only if (iff) service 
 requesting protocol-layer invokes em1 for transmitting sdu. 
-	
-	The most common case on MPLS label bindings are those where maps to unique
+    
+    The most common case on MPLS label bindings are those where maps to unique
 fec, which are implemented as
     
     struct rtentry {
@@ -570,9 +570,8 @@ fec, which are implemented as
     };    
          
 on protocol-layer. For more detailed description about its implementation, see
-by route(9) denoted manual page. 
-
-	Suppose a set of packets in fec 172.16.1.3/24 by
+by route(9) denoted manual page. Suppose a set of packets in fec 172.16.1.3/24 
+by
 
  # route add -4 172.16.1.3 10.0.1.1
  
@@ -595,7 +594,7 @@ still passes em1.
 
  # route add -4 172.16.1.3 -push 200    
 
-binds MPLS label 200 on fec 172.16.1.3
+binds MPLS label 200 in conjuction with
 
  em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
     options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
@@ -606,10 +605,68 @@ binds MPLS label 200 on fec 172.16.1.3
     media: Ethernet autoselect (1000baseT <full-duplex>)
     status: active
  
-and
+on fec 172.16.1.3 denotes fastpath into MPLS transit domain. Any transmitted 
+sdu in promoted fec still passes mpls_output will be encapsulated with MPLS 
+ingress label 200.
+    Regarding the implementation of former introduced rtentry(9) denotes fec, 
+fastpath into MPLS transit will be applied through annotation with
 
- # route get -4 172.16.1.3
+    < op, lsp_in, rd > 
+ 
+of gateway address 
+ 
 
+        + rt_key               .       + MPLS label (BoS)
+        |                      .       |
+        v                      .       v
+      +-------------+----------+-----+------+------+
+      | 172.16.1.3  | 10.0.1.1 | psh | 200  | VPRD |
+      +-------------+----------+-----+------+------+
+                      A
+                      |
+                      + rt_gateway
+
+on focussed rtentry(9) during runtime of mpls_ifinit (see netmpls/mpls.c) 
+called rt_setgate. The gateway address on fec implementing rtentry(9) will 
+be replaced by an instance of
+
+    #define SFTN_DATA_LEN     52
+    struct sockaddr_ftn {
+        uint8_t     sftn_len;    
+        sa_family_t     sftn_family;    /* address family, gateway address */   
+        char     sftn_data[SFTN_DATA_LEN];    /* stores gateway address value */
+        uint32_t     sftn_op;    /* MPLS operation */
+        uint32_t     sftn_label;    /* stores seg_out */
+        uint32_t     sftn_vprd;    /* route distinguisher */
+    };
+    #define SFTN_LEN     (sizeof(struct sockaddr_ftn))
+
+still holding a copy of original gateway address. This avoids a second routing 
+table lookup by service providing MPLS-layer, when handoff by protocol-layer
+processed Message Primitives (mpi) into MPLS data plane was performed. 
+
+
+               rip_input() +{ socket layer }+ rip_output()
+                          /                  \
+                         /                    \
+       +-->+ ip_input() +-->+ ip_forward() +-->+ ip_output()
+      /     \                                   \
+     /       \                                   +
+    +         +<------+                          |
+    |                  \                         v 
+    + mpls_input() +--->+ mpls_forward() +------>+ mpls_output()			
+    |\                                          /|
+    | \                               +<-------+ |
+    |  \                             /           |
+    |   +<-----------+ if_simloop() +<-----------+ if_output()
+    |                                            |
+    + if_input()                                 |
+    A                                            |
+    |                                            V
+ 
+Implecitely, by service requesting protocol-layer performed routing decision 
+promotes a rtentry(9)
+ 
     route to: 172.16.1.3
  destination: 172.16.1.3
      gateway: 10.0.1.1
@@ -618,11 +675,12 @@ and
        flags: <UP,GATEWAY,HOST,DONE,STATIC,MPE>
   recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
        0         0         0         0      1496         1         0 
-
-indicates fec 172.16.1.3 denotes fastpath into MPLS transit domain, where any 
-sdu in promoted fec still passes mpls_output will be encapsulated by MPLS ingres
-label 200.
  
+still holding an extended gateway address (see above), which is accepted as 
+argument by mpls_output and used by mpls_encap for encapsulation by MPLS
+ingress label. 
+
+
  ... to be continued.
  
  

@@ -59,14 +59,14 @@ int	mpls_output(struct ifnet *, struct mbuf *, const struct sockaddr *,
 	struct route *);
 	
 /*
- * Original (hw independent) Link layer output routine is wrapped 
- * by mpls_output, if focussed Link layer interface remains in
- * MPLS enabled state. Original output routine is hooked by 
- * mpls_ifinfo{} and called by mpls_output.
+ * Original (hw independent) Link layer output routine is wrapped by 
+ * mpls_output, if focussed Link layer interface remains in MPLS enabled 
+ * state. Original output routine is hooked by mpls_ifinfo{} and called 
+ * by mpls_output.
  *
- * Any by protocol layer above transmitted mbuf(9) containing 
- * PDU must pass MPLS layer, if for transmission used
- * linklayer interface remains in MPLS enabled state. 
+ * Any by protocol layer above transmitted mbuf(9) containing Protocol 
+ * Data Uniit (pdu) must pass MPLS layer, if for transmission used interface
+ * on link-layer remains in MPLS enabled state. 
  * 
  * I/O Path, IPv4:
  *
