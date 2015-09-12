@@ -526,7 +526,7 @@ implecitely.
      /       \                                    +
     +         +<------+                           |
     |                  \                          v 
-    + mpls_input() +--->+ mpls_forward() +------->+ mpls_output()			
+    + mpls_input() +--->+ mpls_forward() +------->+ mpls_output()
     |\                                           /|
     | \                               +<--------+ |
     |  \                             /            |
@@ -671,7 +671,7 @@ data plane was performed.
      /       \                                   +
     +         +<------+                          |
     |                  \                         v 
-    + mpls_input() +--->+ mpls_forward() +------>+ mpls_output()			
+    + mpls_input() +--->+ mpls_forward() +------>+ mpls_output()
     |\                                          /|
     | \                               +<-------+ |
     |  \                             /           |
