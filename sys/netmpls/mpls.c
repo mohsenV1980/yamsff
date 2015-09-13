@@ -460,13 +460,18 @@ int
 mpls_control(struct socket *so __unused, u_long cmd, caddr_t data, 
 		struct ifnet *ifp, struct thread *td)
 {
+	
 	struct mpls_aliasreq *ifra = (struct mpls_aliasreq *)data;
 	struct ifreq *ifr = (struct ifreq *)data;
 	struct mpls_ifaddr *mia = NULL;
 	struct rtentry *fec = NULL;
 	struct ifaddr *oifa = NULL;
 	struct ifaddr *ifa = NULL;
-	int error = 0, priv = 0, flags = 0;
+	int omsk = RTF_MPLS_OMASK;
+	int fmsk = RTF_MPLS; 
+	int priv = 0;
+	int flags = 0;
+	int error = 0;
 	struct sockaddr *seg, *x;
 
 #ifdef MPLS_DEBUG
@@ -542,7 +547,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			x = oifa->ifa_addr;
  
 			flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
-		} else
+		} else 
 			flags = ifra->ifra_flags;
  		
  		break;
@@ -584,6 +589,33 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 		flags = (RTF_MPLS|RTF_LLDATA|RTF_PUSH|RTF_MPE);
 				
 	case SIOCAIFADDR:	
+/*
+ * Determine, if MPLS label binding is possible.
+ */	
+		if ((fmsk = (flags & fmsk)) == 0)  {
+			error = EINVAL;
+			goto out;
+		}
+		fmsk |= (flags & RTF_GATEWAY) ? RTF_GATEWAY : RTF_LLDATA;
+	
+		if ((fmsk = (flags & fmsk)) == 0)  {
+			error = EINVAL;
+			goto out;
+		}
+		fmsk |= (flags & omsk);
+
+		switch (fmsk & omsk) {
+		case RTF_POP:
+		case RTF_PUSH: 	/* FALLTRHOUGH */
+		case RTF_SWAP:
+			break;
+		default:			
+			error = EOPNOTSUPP;
+			goto out;
+		}
+		fmsk |= (flags & RTF_STK) ? RTF_STK : RTF_MPE;	
+		flags = (flags & fmsk);
+	
 	case SIOCDIFADDR:	 	/* FALLTHROUGH */
 /*
  * Determine, if Forward Equivalence Class (fec) still exists 
@@ -876,7 +908,6 @@ static int
 mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt, 
 		struct sockaddr *sa, int flags)
 {
-	int omsk = RTF_MPLS_OMASK, fmsk = RTF_MPLS; 
 	struct ifaddr *ifa = NULL;
 	struct sockaddr *gw = NULL;
 	struct sockaddr_ftn sftn;
@@ -887,32 +918,6 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
-/*
- * Determine, if MPLS label binding is possible.
- */	
-	if ((fmsk = (flags & fmsk)) == 0)  {
-		error = EINVAL;
-		goto out;
-	}
-	fmsk |= (flags & RTF_GATEWAY) ? RTF_GATEWAY : RTF_LLDATA;
-	
-	if ((fmsk = (flags & fmsk)) == 0)  {
-		error = EINVAL;
-		goto out;
-	}
-	fmsk |= (flags & omsk);
-
-	switch (fmsk & omsk) {
-	case RTF_POP:
-	case RTF_PUSH: 	/* FALLTRHOUGH */
-	case RTF_SWAP:
-		break;
-	default:			
-		error = EOPNOTSUPP;
-		goto out;
-	}
-	fmsk |= (flags & RTF_STK) ? RTF_STK : RTF_MPE;	
-	flags = (flags & fmsk);	
 /*
  * Apply flags and inclusion mapping on fec.
  */	
