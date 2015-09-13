@@ -466,7 +466,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	struct rtentry *fec = NULL;
 	struct ifaddr *oifa = NULL;
 	struct ifaddr *ifa = NULL;
-	int error = 0, priv = 0, flags;
+	int error = 0, priv = 0, flags = 0;
 	struct sockaddr *seg, *x;
 
 #ifdef MPLS_DEBUG
@@ -634,6 +634,11 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 				break;
 			}
 		}
+/* 
+ * If RTF_{PUSH|POP} then fec(x) = nhlfe as bijective mapping.
+ */		
+		if (flags & RTF_SWAP)
+			break;
 		
 		if (mia == NULL) {
 /*
