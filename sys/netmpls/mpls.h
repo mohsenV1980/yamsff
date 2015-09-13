@@ -231,10 +231,6 @@ struct sockaddr_mpls {
  * further 
  * 
  *   seg = < seg_in, seg_out >
- * 
- * and
- * 
- *   < op, seg_out, rd >
  * 	
  * where	
  * 
