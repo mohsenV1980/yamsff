@@ -925,15 +925,15 @@ socket address holds by
 
 extended copy of inherited address x. Implecitely any ilm occours
 
-        + rt_key (seg_in)         .       + MPLS label (seg_out)
-        |                         .       |
-        v                         .       v
-      +-------------+-------------+-----+------+------+
-      | ifa_addr    | fec(rt_key) | OP  | SEG  | VPRD |
-      +-------------+-------------+-----+------+------+
-                      A
-                      |
-                      + rt_gateway
+        + rt_key (seg_in)               .       + MPLS label (seg_out)
+        |                               .       |
+        v                               .       v
+      +-------------------+-------------+-----+------+------+
+      | nhlfe(ifa_addr)   | fec(rt_key) | OP  | SEG  | VPRD |
+      +-------------------+-------------+-----+------+------+
+                            A
+                            |
+                            + rt_gateway
 
 where 
 
@@ -943,9 +943,9 @@ where
 
 and
 
- (c) x = fec(rt_key)
- 
- (d) seg_in = ilm(rt_key)
+ (c) seg_in = ilm(rt_key) = nhlfe(ifa_addr)
+
+ (d) x = fec(rt_key)
  
 regarding at the beginning on implementation notes defined terminology. 
 
