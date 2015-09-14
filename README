@@ -291,8 +291,8 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                    
                   by ipfw(4).
                  
-MPLS label binding
-------------------
+MPLS label binding - implementation notes
+-----------------------------------------
 
 Let us consider
 
@@ -771,15 +771,15 @@ is implemented as
         struct    sockaddr *rt_gateway;    /* value */
         struct    ifnet *rt_ifp;      /* the answer: interface to use */
         struct    ifaddr *rt_ifa;     /* the answer: interface address to use */
-        int        rt_flags;    /* up/down?, host/net */
-        int        rt_refcnt;    /* # held references */
-        u_int        rt_fibnum;    /* which FIB */
-        u_long        rt_mtu;        /* MTU for this path */
-        u_long        rt_weight;    /* absolute weight */ 
-        u_long        rt_expire;    /* lifetime for route, e.g. redirect */
+        int        rt_flags;   
+        int        rt_refcnt;    
+        u_int        rt_fibnum;   
+        u_long        rt_mtu;      
+        u_long        rt_weight;    
+        u_long        rt_expire;    
     #define    rt_endzero    rt_pksent
-        counter_u64_t    rt_pksent;    /* packets sent using this route */
-        struct mtx    rt_mtx;        /* mutex for routing entry */
+        counter_u64_t    rt_pksent;    
+        struct mtx    rt_mtx;       
     };    
          
 denotes node in RADIX Trie on domain in protocol-layer (e. g. AF_INET). See by 
@@ -921,22 +921,27 @@ socket address holds by
 
 extended copy of inherited address x. Implecitely any ilm occours
 
-        + rt_key               .       + MPLS label (BoS)
-        |                      .       |
-        v                      .       v
-      +-------------+----------+-----+------+------+
-      | ifa_addr    | fec(x)   | OP  | SEG  | VPRD |
-      +-------------+----------+-----+------+------+
+        + rt_key                  .       + MPLS label (BoS)
+        |                         .       |
+        v                         .       v
+      +-------------+-------------+-----+------+------+
+      | ifa_addr    | fec(rt_key) | OP  | SEG  | VPRD |
+      +-------------+-------------+-----+------+------+
                       A
                       |
                       + rt_gateway
 
 where 
 
-  (a) rt_key     :=  copy of ifa_addr    maps to mia_seg on nhfle
+ (a) rt_key     :=  copy of ifa_addr    maps to mia_seg on nhfle
   
-  (b) rt_gateway :=  copy of ifa_dstaddr maps to mia_nh  on nhlfe
+ (b) rt_gateway :=  copy of ifa_dstaddr maps to mia_nh  on nhlfe
 
+and
+
+ (c) fec(rt_key) = x
+ 
+regarding defined terminlology at the beginning on implementation notes. 
 
  ... to be continued.
  

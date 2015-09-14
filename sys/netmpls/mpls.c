@@ -667,10 +667,12 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 			}
 		}
 /* 
- * If RTF_{PUSH|POP} then fec(x) = nhlfe as bijective mapping.
- */		
-		if (flags & RTF_SWAP)
+ * Step out, if RTF_SWAP as precondition for rfc-3021, 3.26. Label Merging.
+ */	
+		if (flags & RTF_SWAP) {
+			MPLS_IFADDR_RUNLOCK();	
 			break;
+		}
 		
 		if (mia == NULL) {
 /*

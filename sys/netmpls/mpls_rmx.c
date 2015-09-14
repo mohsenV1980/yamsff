@@ -246,27 +246,24 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 				/* FALLTHROUGH */
 
 	case RTM_DELETE:
-
-		cmd = (cmd == 0) ? SIOCDIFADDR : cmd;
 /*
  * Delete MPLS label binding on fec.
  */	
-		bcopy(rti_gateway(rti), seg, rti_gateway(rti)->sa_len);
-		ifra.ifra_flags = rti_flags(rti);
-		
-		RT_UNLOCK(fec); 
+		cmd = (cmd == 0) ? SIOCDIFADDR : cmd;
 /*
  * Perform MPLS control operations on interface-layer.
  */		
+ 		bcopy(rti_gateway(rti), seg, rti_gateway(rti)->sa_len);
+		ifra.ifra_flags = rti_flags(rti);
+ 		
+ 		RT_UNLOCK(fec);
  		error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
 		RT_LOCK(fec); 
 		break;
 	case RTM_GET:
 /*
  * Fetch Incoming Label Map (ilm) by MPLS label binding on fec.
- */	
-		cmd = SIOCGIFADDR;
-		
+ */
 		seg->sa_len = SMPLS_LEN;
 		seg->sa_family = AF_MPLS;
 		satosmpls_label(seg) = satosmpls_label(rti_gateway(rti));
