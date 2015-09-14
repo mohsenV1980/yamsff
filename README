@@ -939,7 +939,7 @@ where
 
 and
 
- (c) fec(rt_key) = x
+ (c) x = fec(rt_key)
  
 regarding at the beginning on implementation notes defined terminology. 
 
