@@ -921,7 +921,7 @@ socket address holds by
 
 extended copy of inherited address x. Implecitely any ilm occours
 
-        + rt_key                  .       + MPLS label (BoS)
+        + rt_key (seg_in)         .       + MPLS label (seg_out)
         |                         .       |
         v                         .       v
       +-------------+-------------+-----+------+------+
@@ -940,6 +940,8 @@ where
 and
 
  (c) x = fec(rt_key)
+ 
+ (d) seg_in = ilm(rt_key)
  
 regarding at the beginning on implementation notes defined terminology. 
 
