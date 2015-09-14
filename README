@@ -941,7 +941,7 @@ and
 
  (c) fec(rt_key) = x
  
-regarding defined terminlology at the beginning on implementation notes. 
+regarding at the beginning on implementation notes defined terminology. 
 
  # route add -4 172.16.1.3 -swap 300 -mpls 200
  
