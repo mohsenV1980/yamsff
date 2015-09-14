@@ -782,9 +782,9 @@ is implemented as
         struct mtx    rt_mtx;        /* mutex for routing entry */
     };    
          
-denotes node in RADIX Trie on domain (e. g. AF_INET) in protocol-layer. For more 
-detailed description about its implementation, see by route(4) and rtentry(9) 
-denoted manual pages. 
+denotes node in RADIX Trie on domain in protocol-layer (e. g. AF_INET). See by 
+route(4) and rtentry(9) denoted manual pages for detailed description about its 
+implementation.  
     Suppose a set of packets in e. g. 
 
    fec 172.16.1.3/24 
@@ -806,7 +806,7 @@ where
   recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
        0         0         0         0      1500         1         0 
        
-still shows that any by protocol layer delivered sdu in set of packets on
+still shows that any by protocol-layer delivered sdu in set of packets on
 introduced fec still passes em1. Then 
 
  # route add -4 172.16.1.3 -push 200    
@@ -826,7 +826,7 @@ on fec 172.16.1.3. Regarding the implementation of rtentry(9) denotes unique
 fec, fastpath into MPLS transit will be applied through extending its 
 gateway address by
 
-      < op, lsp_in, rd > 
+      < psh, 200, 200 > 
  
 during runtime of mpls_ifinit (see netmpls/mpls.c) called rt_setgate. Former
 gateway address may replaced by an instance of
@@ -858,7 +858,6 @@ This avoids a second routing table lookup by service providing MPLS-layer,
 when handoff by protocol-layer processed Message Primitives (mpi) into MPLS 
 data plane by calling mpls_output was performed. 
 
-
                rip_input() +{ socket layer }+ rip_output()
                           /                  \
                          /                    \
@@ -878,7 +877,7 @@ data plane by calling mpls_output was performed.
     |                                            V
  
 Implecitely, by service requesting protocol-layer performed routing decision 
-promotes a rtentry(9) with enabled RTF_MPE flag still in conjuction 
+promotes a rtentry(9) with enabled RTF_MPE flag, denotes fastpath still in  
  
     route to: 172.16.1.3
  destination: 172.16.1.3
@@ -889,9 +888,9 @@ promotes a rtentry(9) with enabled RTF_MPE flag still in conjuction
   recvpipe  sendpipe  ssthresh  rtt,msec    mtu        weight    expire
        0         0         0         0      1496         1         0 
  
-with extended gateway address providing the MPLS label value denotes ingress 
-label. Thus, any by mpls_output accepted sdu belonging to fec denotes fastpath 
-into AF_MPLS domain will be encapsulated by mpls_encap.
+conjuction with extended gateway address providing the MPLS label value denotes 
+ingress label (lsp_in). Thus, any by mpls_output accepted sdu belonging to fec 
+denotes fastpath into AF_MPLS domain will be encapsulated by mpls_encap.
     It is obvious, any MPLS label binding that is enclosed by fec denotes 
 fastpath does not genarates an ilm. An ilm is an instance of former introduced
 rtentry(9) on RADIX Trie in AF_MPLS domain, where its key is implemented by
@@ -909,15 +908,16 @@ and its gateway address holds a copy by ifa_dstaddr reffered destination
 address on nhlfe. Any by mpls_control in conjuction with SIOC[AS]IFADDR
 newly allocated or reused nhlfe inherites either 
 
-  (a) the link-level address x or
+ (a) the link-level address x or
 
-  (b) the destination address x 
+ (b) the destination address x 
  
 from its enclosing fec. Due to case (a) ifnet(9) implementation of link-layer
-interface is fec itself (aggregate set of routes), otherwise fec is implemented
-by rtentry(9). Therefore by ifa_dstaddr referred socket addres holds by
+interface provides fec itself (aggregate set of routes) by refexive mapping, 
+otherwise fec is implemented by rtentry(9). Therefore by ifa_dstaddr referred 
+socket address holds by
 
-      < op, seg, rd > 
+      < OP, SEG, RD > 
 
 extended copy of inherited address x. Implecitely any ilm occours
 
