@@ -192,7 +192,6 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 { 		
 	struct rtentry *fec = NULL;
 	struct mpls_aliasreq ifra;
-	struct sockaddr *x, *seg;
 	struct ifnet *ifp;
 	int error = 0, cmd = 0;
 	
@@ -205,24 +204,6 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
-	bzero(&ifra, sizeof(ifra));
-	
-	seg = (struct sockaddr *)&ifra.ifra_seg;
-	x = (struct sockaddr *)&ifra.ifra_x;
-	
-	bcopy(rti_dst(rti), x, rti_dst(rti)->sa_len);
-/*
- * Fetch interface by Forward Equivalence Class (fec).
- */	
- 	fec = rtalloc1_fib(x, 0, 0UL, 0);
-	if ((fec == NULL) 		
-		|| (fec->rt_gateway == NULL) 
-		|| ((ifp = fec->rt_ifp) == NULL)
-		|| (fec->rt_ifa == NULL) 
-		|| ((fec->rt_flags & RTF_UP) == 0)) {
-		error = ESRCH;
-		goto out;
-	}	
 	
 	if (rti_gateway(rti)->sa_family != AF_MPLS) {
 		log(LOG_INFO, "%s: segment invalid\n", __func__);
@@ -235,6 +216,20 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		error = EMSGSIZE;
 		goto out;
 	}
+/*
+ * Fetch interface by Forward Equivalence Class (fec).
+ */	
+ 	fec = rtalloc1_fib(rti_dst(rti), 0, 0UL, 0);
+	if ((fec == NULL) 		
+		|| (fec->rt_gateway == NULL) 
+		|| ((ifp = fec->rt_ifp) == NULL)
+		|| (fec->rt_ifa == NULL) 
+		|| ((fec->rt_flags & RTF_UP) == 0)) {
+		error = ESRCH;
+		goto out;
+	}
+	bzero(&ifra, sizeof(ifra));
+	bcopy(rti_dst(rti), &ifra.ifra_x, rti_dst(rti)->sa_len);
 	
  	switch ((int)rtm->rtm_type) {
 	case RTM_ADD:	
@@ -253,7 +248,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 /*
  * Perform MPLS control operations on interface-layer.
  */		
- 		bcopy(rti_gateway(rti), seg, rti_gateway(rti)->sa_len);
+ 		bcopy(rti_gateway(rti), &ifra.ifra_seg, rti_gateway(rti)->sa_len);
 		ifra.ifra_flags = rti_flags(rti);
  		
  		RT_UNLOCK(fec);
@@ -266,21 +261,33 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  * XXX: back to rt_output, but I'm not yet sure, if 
  * XXX: I'll should do that...
  */
-		seg->sa_len = SMPLS_LEN;
-		seg->sa_family = AF_MPLS;
-		satosmpls_label(seg) = satosmpls_label(rti_gateway(rti));
+		ifra.ifra_seg.sftn_len = SMPLS_LEN;
+		ifra.ifra_seg.sftn_family = AF_MPLS;
+		
+		((struct sockaddr_mpls *)&ifra.ifra_seg)->smpls_label = 
+			satosmpls_label(rti_gateway(rti));
 /*
  * Fetch Incoming Label Map (ilm) by MPLS label binding on fec.
  */		
 		*rt = ((ifra.ifra_flags & RTF_MPE) == 0) 
-			? rtalloc1_fib(seg, 0, 0UL, 0) : NULL;	
+			? rtalloc1_fib((struct sockaddr *)&ifra.ifra_seg, 
+				0, 0UL, 0) : NULL;	
+		
+		if (*rt != NULL) {
+			RT_ADDREF(*rt);	
 /*
  * Refcnt must be increased, because rt_output decrements it implecitely.
- */		
-		if (*rt == NULL)
-			error = EADDRNOTAVAIL;
-		else 
-			RT_ADDREF(*rt);	
+ */
+			bcopy(rt_key(*rt), rti_dst(rti), 
+				rt_key(*rt)->sa_len); 
+			bcopy((*rt)->rt_gateway, rti_gateway(rti), 
+				(*rt)->rt_gateway->sa_len);
+			
+			rti_ifa(rti) = (*rt)->rt_ifa;
+			rti_ifp(rti) = (*rt)->rt_ifp;
+			rti_flags(rti) = (*rt)->rt_flags;
+		} else
+		 	error = EADDRNOTAVAIL;
 					
 		break;
 	default:

@@ -102,7 +102,6 @@
 #include <netmpls/mpls.h>
 extern int 	mpls_rt_output_fib(struct rt_msghdr *, 
 	struct rt_addrinfo *, struct rtentry **, u_int);
-int 	mpls_newaddrmsg(struct ifnet *, struct sockaddr *seg);
 #endif 	/* MPLS */
 
 #ifdef COMPAT_FREEBSD32

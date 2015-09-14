@@ -305,7 +305,7 @@ Let us consider
     rd      : MPLS Route Distinguisher or reserved label value
     seg_i   : defines downstream label, e. g. in-segment (seg_in, lsp_in)
     seg_j   : defines downstream label, e. g. out-segment (seg_out, lsp_out)
-    seg     : denotes particular Label Switch Path (LSP) in SEG
+    seg     : denotes particular Label Switch Path (lsp) in < SEG, SEG >
     x       : destination, key in fec or link-level address on ifnet(9)
 
 if     
