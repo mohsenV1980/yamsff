@@ -194,7 +194,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 	struct mpls_aliasreq ifra;
 	struct sockaddr *x, *seg;
 	struct ifnet *ifp;
-	int error, cmd = 0;
+	int error = 0, cmd = 0;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
@@ -260,17 +260,28 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  		error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
 		RT_LOCK(fec); 
 		break;
-	case RTM_GET:
+	case RTM_GET: 
 /*
- * Fetch Incoming Label Map (ilm) by MPLS label binding on fec.
+ * XXX: looks ugly... I'll delegate this operation 
+ * XXX: back to rt_output, but I'm not yet sure, if 
+ * XXX: I'll should do that...
  */
 		seg->sa_len = SMPLS_LEN;
 		seg->sa_family = AF_MPLS;
 		satosmpls_label(seg) = satosmpls_label(rti_gateway(rti));
-		
+/*
+ * Fetch Incoming Label Map (ilm) by MPLS label binding on fec.
+ */		
 		*rt = ((ifra.ifra_flags & RTF_MPE) == 0) 
 			? rtalloc1_fib(seg, 0, 0UL, 0) : NULL;	
-		error = (*rt == NULL) ? EADDRNOTAVAIL : 0;
+/*
+ * Refcnt must be increased, because rt_output decrements it implecitely.
+ */		
+		if (*rt == NULL)
+			error = EADDRNOTAVAIL;
+		else 
+			RT_ADDREF(*rt);	
+					
 		break;
 	default:
 		log(LOG_INFO, "%s: command invalid\n", __func__);		

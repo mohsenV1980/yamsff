@@ -943,6 +943,20 @@ and
  
 regarding defined terminlology at the beginning on implementation notes. 
 
+ # route add -4 172.16.1.3 -swap 300 -mpls 200
+ 
+merges lsp 300 with lsp 200 by RTF_SWAP denoted MPLS operation
+
+ em1: flags=3008843<UP,BROADCAST,RUNNING,SIMPLEX,MULTICAST,MPLS,MPE> metric 0 mtu 1500
+    options=9b<RXCSUM,TXCSUM,VLAN_MTU,VLAN_HWTAGGING,VLAN_HWCSUM>
+    ether 08:00:27:19:9b:5b
+    mpls 300 swp 200 -> inet 172.16.1.3
+    mpls 200 psh -> inet 172.16.1.3
+    mpls 100 psh -> ether 08:00:27:19:9b:5b
+    inet 10.0.1.1 netmask 0xffffff00 broadcast 10.0.1.255 
+    media: Ethernet autoselect (1000baseT <full-duplex>)
+    status: active
+
  ... to be continued.
  
  
