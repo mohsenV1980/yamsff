@@ -210,14 +210,14 @@ struct sockaddr_mpls {
  * 
  *   fec     : Forward Equivalence Class
  *   ftn     : FEC-to-NHLFE Map 
- *   ilm     : incoming label map
+ *   ilm     : Incoming Label Map
  *   nh      : next-hop or gateway address
  *   nhlfe   : Next Hop Label Forwarding Entry
- *   op      : MPLS operation in OP
+ *   op      : MPLS operation
  *   rd      : MPLS Route Distinguisher or reserved label value
- *   seg_i   : defines downstream label, e. g. in-segment (seg_in, lsp_in)
- *   seg_j   : defines downstream label, e. g. out-segment (seg_out, lsp_out)
- *   seg_ij  : denotes particular Label Switch Path (LSP) in < SEG, SEG >
+ *   seg_i   : in-segment (seg_in, lsp_in)
+ *   seg_j   : out-segment (seg_out, lsp_out)
+ *   seg     : particular Label Switch Path (LSP) in < SEG, SEG >
  *   x       : destination, key in fec or link-level address on ifnet(9)
  * 
  * if 	
