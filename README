@@ -801,7 +801,7 @@ implementation.
  
 in by
  
- # route add -4 172.16.1.3 10.0.1.1
+ # route get -4 172.16.1.3 10.0.1.1
  
  route to: 172.16.1.3
  destination: 172.16.1.3
@@ -884,7 +884,7 @@ Implecitely, by service requesting protocol-layer performed routing decision
 during e. g. ip_output promotes a rtentry(9) where its enabled RTF_MPE flag, 
 denotes fastpath still in conjuction with extended gateway address. 
  
-  # route get -4 172.16.1.3 10.0.1.1
+ # route get -4 172.16.1.3 10.0.1.1
  
     route to: 172.16.1.3
  destination: 172.16.1.3
