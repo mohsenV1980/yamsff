@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Henning Matyschok
+ * Copyright (c) 2015 Henning Matyschok
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -1275,13 +1275,6 @@ static struct cmd basic_cmds[] = {
 	DEF_CMD("noicmp",	IFF_LINK1,	setifflags),
 	DEF_CMD_ARG("mtu",			setifmtu),
 	DEF_CMD_ARG("name",			setifname),
-#ifdef MPLS
-/*
- * Enable / disable MPLS encapsulation.
- */	
-	DEF_CMD("encap",	IFF_MPLS,	setifflags),
-	DEF_CMD("-encap",	-IFF_MPLS,	setifflags),
-#endif /* MPLS */ 
 };
 
 static __constructor void

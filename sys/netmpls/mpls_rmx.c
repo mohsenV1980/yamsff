@@ -191,8 +191,8 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		struct rtentry **rt, u_int fibnum)
 { 		
 	struct rtentry *fec = NULL;
+	struct ifnet *ifp = NULL;
 	struct mpls_aliasreq ifra;
-	struct ifnet *ifp;
 	int error = 0, cmd = 0;
 	
 #ifdef MPLS_DEBUG

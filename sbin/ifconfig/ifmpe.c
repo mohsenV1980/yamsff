@@ -68,7 +68,7 @@ mpe_status(int s)
 	sdl->sdl_len = sizeof(*sdl);
 	sdl->sdl_family = AF_LINK;	
 	
-	if (ioctl(s, SIOCGLIFPHYADDR, &iflr) < 0)  
+	if (ioctl(s, SIOCGLIFPHYADDR, (caddr_t)&iflr) < 0)  
 		return;
 /*
  * Following code-section is reused from implementation 
