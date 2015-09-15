@@ -622,7 +622,6 @@ routename(struct sockaddr *sa)
 		if (p != NULL && strcmp(p + 1, domain) == 0)
 			*p = '\0';
 
-		return (line);
 		break;
 	}
 #endif
@@ -641,15 +640,14 @@ routename(struct sockaddr *sa)
 			    sdl->sdl_index);
 			if (n > (int)sizeof(line))
 			    line[0] = '\0';
-			return (line);
 		} else
-			return (link_ntoa(sdl));
+			(void)snprintf(line, sizeof(line), "%s", link_ntoa(sdl));
 		break;
 #ifdef MPLS
 	case AF_MPLS:
 	{	
-		uint32_t label = satosftn_vprd(sa);
-		(void)sprintf(line, "<seg#%d>", 
+		uint32_t label = satosmpls_label(sa);
+		(void)sprintf(line, "<in#%d>", 
 			ntohl(label) >> MPLS_LABEL_OFFSET);
 		break;
 	}
@@ -672,7 +670,7 @@ routename(struct sockaddr *sa)
 #ifdef MPLS
 	if (sa->sa_len == sizeof(struct sockaddr_ftn)) {
 		static char line1[MAXHOSTNAMELEN + 1];
-		uint32_t seg_in, seg_out; 	
+		uint32_t seg_out; 	
 /*
  * Extends fmt string denotes gateway address 
  * by operation and in case of RTF_SWAP by 
@@ -682,11 +680,8 @@ routename(struct sockaddr *sa)
 		
 		seg_out = satosftn_label(sa);
 		seg_out = ntohl(seg_out) >> MPLS_LABEL_OFFSET;
-		seg_in = satosftn_vprd(sa);
-		seg_in = ntohl(seg_in) >> MPLS_LABEL_OFFSET;
 		
-		(void)sprintf(line, "<in#%d> %s <out#%d>", 
-			seg_in, line1, seg_out);
+		(void)sprintf(line, "%s <out#%d>", line1, seg_out);
 	}
 #endif /* MPLS */
 	return (line);

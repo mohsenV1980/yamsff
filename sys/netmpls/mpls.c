@@ -910,6 +910,7 @@ static int
 mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt, 
 		struct sockaddr *sa, int flags)
 {
+	struct rtentry *ilm = NULL;
 	struct ifaddr *ifa = NULL;
 	struct sockaddr *gw = NULL;
 	struct sockaddr_ftn sftn;
@@ -1050,7 +1051,11 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 				mia->mia_dstaddr, 
 				mia->mia_netmask, 
 				mia->mia_rt_flags, 
-				NULL, 0);
+				&ilm, 0);
+#ifdef MPLS_DEBUG		
+	if (ilm != NULL)
+		(void)printf("%s: rt_refcnt= %d\n", __func__, ilm->rt_refcnt);
+#endif /* MPLS_DEBUG */			
 		}
 	}
 	

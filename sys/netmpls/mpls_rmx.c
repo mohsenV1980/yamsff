@@ -274,17 +274,11 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 				0, 0UL, 0) : NULL;	
 		
 		if (*rt != NULL) {
-			RT_ADDREF(*rt);	
-/*
- * Refcnt must be increased, because rt_output decrements it implecitely.
- */
 			bcopy(rt_key(*rt), rti_dst(rti), 
 				rt_key(*rt)->sa_len); 
 			bcopy((*rt)->rt_gateway, rti_gateway(rti), 
 				(*rt)->rt_gateway->sa_len);
-			
-			rti_ifa(rti) = (*rt)->rt_ifa;
-			rti_ifp(rti) = (*rt)->rt_ifp;
+				
 			rti_flags(rti) = (*rt)->rt_flags;
 		} else
 		 	error = EADDRNOTAVAIL;

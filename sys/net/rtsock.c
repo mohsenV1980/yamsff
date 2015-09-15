@@ -677,11 +677,6 @@ route_output(struct mbuf *m, struct socket *so)
 		} else if (rt != NULL && rt->rt_flags & RTF_MPLS) 
 			RT_UNLOCK(rt);
 	
-#ifdef MPLS_DEBUG
-		if (rt != NULL)
-			(void)printf("%s: rt_refcnt= %d\n", __func__, rt->rt_refcnt);
-#endif /* MPLS_DEBUG */	
-			
 		senderr(error);
 	}
 #endif /* MPLS */
