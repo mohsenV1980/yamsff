@@ -674,9 +674,10 @@ route_output(struct mbuf *m, struct socket *so)
 			rt_setmetrics(rtm, rt);
 			rtm->rtm_index = rt->rt_ifp->if_index;		 
 			RT_UNLOCK(rt);
-		} else if (rt != NULL && rt->rt_flags & RTF_MPLS) 
+		} else if (rt != NULL && rt->rt_flags & RTF_MPLS) {
+			rt_getmetrics(rt, &rtm->rtm_rmx);
 			RT_UNLOCK(rt);
-	
+		}
 		senderr(error);
 	}
 #endif /* MPLS */
