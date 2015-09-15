@@ -1052,11 +1052,18 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 				mia->mia_netmask, 
 				mia->mia_rt_flags, 
 				&ilm, 0);
-#ifdef MPLS_DEBUG		
-	if (ilm != NULL)
-		(void)printf("%s: rt_refcnt= %d\n", __func__, ilm->rt_refcnt);
+	
+			if (ilm != NULL)
+/*
+ * On success, inherite metrics from its enclosing fec.
+ */				
+				ilm->rt_mtu = rt->rt_mtu;
+				ilm->rt_weight = rt->rt_weight;
+				ilm->rt_expire = rt->rt_expire;
+#ifdef MPLS_DEBUG	
+	(void)printf("%s: rt_refcnt= %d\n", __func__, ilm->rt_refcnt);
 #endif /* MPLS_DEBUG */			
-		}
+			}
 	}
 	
 	if (error == 0) 
