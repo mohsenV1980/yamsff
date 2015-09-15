@@ -1052,8 +1052,9 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 				mia->mia_netmask, 
 				mia->mia_rt_flags, 
 				&ilm, 0);
-	
-			if (ilm != NULL)
+
+			if (ilm != NULL) {			
+				RT_LOCK(ilm);
 /*
  * On success, inherite metrics from its enclosing fec.
  */				
@@ -1062,8 +1063,10 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 				ilm->rt_expire = rt->rt_expire;
 #ifdef MPLS_DEBUG	
 	(void)printf("%s: rt_refcnt= %d\n", __func__, ilm->rt_refcnt);
-#endif /* MPLS_DEBUG */			
+#endif /* MPLS_DEBUG */	
+				RT_UNLOCK(ilm);		
 			}
+		}
 	}
 	
 	if (error == 0) 
