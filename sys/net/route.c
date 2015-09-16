@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Henning Matyschok
+ * Copyright (c) 2015 Henning Matyschok
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -808,7 +808,12 @@ ifa_ifwithroute_fib(int flags, struct sockaddr *dst, struct sockaddr *gateway,
 			&& (gateway->sa_family != AF_MPLS) 
 			&& (dst->sa_family == AF_MPLS))
 			ifa = mpls_ifawithxconnect_fib(dst, gateway, fibnum, 1);
-		
+	
+#ifdef MPLS_DEBUG
+	if (ifa != NULL)
+		(void)printf("%s\n", __func__);
+#endif /* MPLS_DEBUG */
+	
 		return (ifa);	
 	} 
 #endif /* MPLS */
