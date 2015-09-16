@@ -809,11 +809,6 @@ ifa_ifwithroute_fib(int flags, struct sockaddr *dst, struct sockaddr *gateway,
 			&& (dst->sa_family == AF_MPLS))
 			ifa = mpls_ifawithxconnect_fib(dst, gateway, fibnum, 1);
 	
-#ifdef MPLS_DEBUG
-	if (ifa != NULL)
-		(void)printf("%s\n", __func__);
-#endif /* MPLS_DEBUG */
-	
 		return (ifa);	
 	} 
 #endif /* MPLS */

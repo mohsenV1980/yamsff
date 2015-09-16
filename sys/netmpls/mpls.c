@@ -817,9 +817,9 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 /*
  * Remove MPLS label binding scoped on set containing fec.
  */			
-		if (rt->rt_flags & RTF_STK) 
+		if (mia->mia_rt_flags & RTF_STK) 
 			rt->rt_flags &= ~RTF_STK;
-		else if (rt->rt_flags & RTF_MPE) {
+		else if (mia->mia_rt_flags & RTF_PUSH) {
 /*
  * Restore former gateway address, if fec denotes fastpath.
  */	
@@ -851,7 +851,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 				mia->mia_netmask, 
 				mia->mia_rt_flags, 
 				NULL, ifp->if_fib);
-				
+			
 			if (error != 0)
 				goto out;	
 		}
@@ -968,7 +968,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  * Create llentry{} by SIOCSIFADDR triggered inclusion mapping.
  */		
 	error = (*ifp->if_ioctl)(ifp, SIOCSIFADDR, (void *)mia);
-	if (error != 0) 
+	if (error != 0) 	
 		goto out;
 
 	if (rt == NULL) {
