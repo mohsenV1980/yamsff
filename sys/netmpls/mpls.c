@@ -858,7 +858,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 				mia->mia_dstaddr, 
 				mia->mia_netmask, 
 				mia->mia_rt_flags, 
-				NULL, 0);
+				NULL, ifp->if_fib);
 				
 			if (error != 0)
 				goto out;	
@@ -1051,7 +1051,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 				mia->mia_dstaddr, 
 				mia->mia_netmask, 
 				mia->mia_rt_flags, 
-				&ilm, 0);
+				&ilm, ifp->if_fib);
 
 			if (ilm != NULL) {			
 				RT_LOCK(ilm);

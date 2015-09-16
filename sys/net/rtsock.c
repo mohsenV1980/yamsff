@@ -670,13 +670,19 @@ route_output(struct mbuf *m, struct socket *so)
  * Requests on AF_MPLS domain are redirected. 
  */	
 		error = mpls_rt_output_fib(rtm, &info, &rt, so->so_fibnum);
-		if (error == 0 && rt != NULL && (int)rtm->rtm_type == RTM_ADD) {
-			rt_setmetrics(rtm, rt);
-			rtm->rtm_index = rt->rt_ifp->if_index;		 
-			RT_UNLOCK(rt);
-		} else if (rt != NULL && rt->rt_flags & RTF_MPLS) {
-			rt_getmetrics(rt, &rtm->rtm_rmx);
-			RT_UNLOCK(rt);
+		if (error == 0 && rt != NULL) {
+			switch ((int)rtm->rtm_type) { 
+			case RTM_ADD:
+				rt_setmetrics(rtm, rt);
+				rtm->rtm_index = rt->rt_ifp->if_index;		 
+				RT_UNLOCK(rt);
+				break;
+			case RTM_DELETE:
+			case RTM_GET:
+				goto report;
+			default:
+				break;
+			}
 		}
 		senderr(error);
 	}

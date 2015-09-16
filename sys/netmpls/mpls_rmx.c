@@ -219,7 +219,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 /*
  * Fetch interface by Forward Equivalence Class (fec).
  */	
- 	fec = rtalloc1_fib(rti_dst(rti), 0, 0UL, 0);
+ 	fec = rtalloc1_fib(rti_dst(rti), 0, 0UL, fibnum);
 	if ((fec == NULL) 		
 		|| (fec->rt_gateway == NULL) 
 		|| ((ifp = fec->rt_ifp) == NULL)
@@ -271,15 +271,16 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  */		
 		*rt = ((ifra.ifra_flags & RTF_MPE) == 0) 
 			? rtalloc1_fib((struct sockaddr *)&ifra.ifra_seg, 
-				0, 0UL, 0) : NULL;	
+				0, 0UL, ifp->if_fib) : NULL;	
 		
 		if (*rt != NULL) {
+/*
+ * Update by socket(2) on route(4) used Service Data Unit (sdu).
+ */			
 			bcopy(rt_key(*rt), rti_dst(rti), 
 				rt_key(*rt)->sa_len); 
 			bcopy((*rt)->rt_gateway, rti_gateway(rti), 
 				(*rt)->rt_gateway->sa_len);
-				
-			rti_flags(rti) = (*rt)->rt_flags;
 		} else
 		 	error = EADDRNOTAVAIL;
 					
