@@ -673,8 +673,7 @@ route_output(struct mbuf *m, struct socket *so)
 		if (error == 0 && rt != NULL) {
 			switch ((int)rtm->rtm_type) { 
 			case RTM_ADD:
-				rt_setmetrics(rtm, rt);
-				rtm->rtm_index = rt->rt_ifp->if_index;		 
+				rt_setmetrics(rtm, rt);	 
 				RT_UNLOCK(rt);
 				break;
 			case RTM_DELETE:
