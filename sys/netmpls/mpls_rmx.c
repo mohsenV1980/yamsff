@@ -252,7 +252,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
 		ifra.ifra_flags = rti_flags(rti);
  		
  		RT_UNLOCK(fec);
- 		error = mpls_control(NULL, cmd, (void *)&ifra, ifp, NULL);
+ 		error = mpls_control(NULL, cmd, (caddr_t)&ifra, ifp, NULL);
 		RT_LOCK(fec); 
 		break;
 	case RTM_GET: 

@@ -309,7 +309,7 @@ done:
  */
 struct mpls_ifaddrbuf {
 	TAILQ_ENTRY(mpls_ifaddrbuf)	ib_chain;
-	struct ifaddr	*ib_nhlfe;
+	struct mpls_ifaddr	*ib_nhlfe;
 };
 TAILQ_HEAD(mpls_ifaddrbuf_hd, mpls_ifaddrbuf);
 
@@ -332,7 +332,6 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 #endif /* MPLS_DEBUG */
 
 	RT_LOCK_ASSERT(fec);
-	RT_UNLOCK(fec);
 	TAILQ_INIT(&hd);
 	ifp = fec->rt_ifp;
 
@@ -358,7 +357,7 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
  * Can't fail.
  */			
 			ib = malloc(sizeof(*ib), M_TEMP, M_WAITOK|M_ZERO);
-			ib->ib_nhlfe = ifa;	
+			ib->ib_nhlfe = ifatomia(ifa);	
 			
 			TAILQ_INSERT_TAIL(&hd, ib, ib_chain);
 		}
@@ -369,9 +368,30 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 		while (!TAILQ_EMPTY(&hd)) {
 			ib = TAILQ_FIRST(&hd);
 			
-			mpls_purgeaddr(ib->ib_nhlfe);
-			
-			ifa_free(ib->ib_nhlfe);
+			if (mpls_ifscrub(ifp, ib->ib_nhlfe, fec) == 0) {
+/*
+ * Dequeue nhlfe scoped on interface.
+ */				
+				ifa = &ib->ib_nhlfe->mia_ifa;
+	
+				IF_ADDR_WLOCK(ifp);
+				TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
+				IF_ADDR_WUNLOCK(ifp);
+		
+				ifa_free(ifa);
+/*
+ * Dequeue nhlfe globally.
+ */				
+				MPLS_IFADDR_WLOCK();
+				TAILQ_REMOVE(&mpls_ifaddrhead, ib->ib_nhlfe, mia_link);	
+				MPLS_IFADDR_WUNLOCK();
+
+				ifa_free(&ib->ib_nhlfe->mia_ifa);
+			}	
+/*
+ * Release by nhlfe bound ressources.
+ */			
+			ifa_free(&ib->ib_nhlfe->mia_ifa);
 			ib->ib_nhlfe = NULL;
 			
 			free(ib, M_TEMP);
@@ -380,7 +400,6 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 	default:
 		break;
 	}			
-	RT_LOCK(fec);
 	fec->rt_mtu = ifp->if_mtu;
 }
 
@@ -390,12 +409,9 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 void	
 mpls_purgeaddr(struct ifaddr *ifa)
 {	
-	struct rtentry *fec = NULL;
-	struct sockaddr_ftn sftn;
+	struct mpls_aliasreq ifra;
 	struct mpls_ifaddr *mia;
 	struct ifnet *ifp;
-	struct sockaddr *x;
-	struct sockaddr *gw;
 	size_t len;
 	
 #ifdef MPLS_DEBUG
@@ -405,50 +421,23 @@ mpls_purgeaddr(struct ifaddr *ifa)
 	KASSERT((ifa != NULL), ("Invalid argument"));
 	
 	if ((ifa->ifa_flags & IFA_NHLFE) == 0)
-		goto out;
-		
+		return;
+	
 	mia = ifatomia(ifa);
 	ifp = mia->mia_ifp;
-	
-	x = mia->mia_dstaddr;
-	gw = mia->mia_x->ifa_addr;
-	
-	bzero(&sftn, sizeof(sftn));
-	sftn.sftn_len = gw->sa_len;
-	sftn.sftn_family = x->sa_family;
-	
-	len = gw->sa_len - offsetof(struct sockaddr, sa_data);
-	bcopy(gw->sa_data, sftn.sftn_data, len);	
-	x = (struct sockaddr *)&sftn;
-	
-	fec = rtalloc1_fib(x, 0, 0UL, 0);
-	if (fec != NULL) {		
-		if ((fec->rt_gateway == NULL) 
-			|| (fec->rt_ifp != ifp)
-			|| (fec->rt_ifa == NULL) 
-			|| ((fec->rt_flags & RTF_UP) == 0)) 
-			goto out;
-	}
-		
-	if (mpls_ifscrub(ifp, mia, fec) != 0)
-		goto out;		
-/*
- * Dequeue nhlfe.
- */	
-	IF_ADDR_WLOCK(ifp);
-	TAILQ_REMOVE(&ifp->if_addrhead, ifa, ifa_link);	
-	IF_ADDR_WUNLOCK(ifp);
-		
-	ifa_free(ifa);
-		
-	MPLS_IFADDR_WLOCK();
-	TAILQ_REMOVE(&mpls_ifaddrhead, mia, mia_link);	
-	MPLS_IFADDR_WUNLOCK();
 
-	ifa_free(ifa);		
-out:
-	if (fec != NULL) 
-		RTFREE_LOCKED(fec);
+	bzero(&ifra, sizeof(ifra));
+	bcopy(mia->mia_addr, &ifra.ifra_seg, mia->mia_addr->sa_len);
+	
+	ifra.ifra_x.sftn_len = mia->mia_x->ifa_addr->sa_len;
+	ifra.ifra_x.sftn_family = mia->mia_dstaddr->sa_family;
+	
+	len = ifra.ifra_x.sftn_len - offsetof(struct sockaddr, sa_data);
+	bcopy(mia->mia_dstaddr->sa_data, ifra.ifra_x.sftn_data, len);
+	
+	ifra.ifra_flags = mia->mia_rt_flags;
+	
+	(void)mpls_control(NULL, SIOCDIFADDR, (caddr_t)&ifra, ifp, NULL);
 }
 
 /*
@@ -806,12 +795,11 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 {
 	struct sockaddr_ftn sftn;
 	struct sockaddr *seg;
-	int error;
+	int error = 0;
 	
 #ifdef MPLS_DEBUG
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
-	error = 0;
 	
 	if (rt == NULL) {
 /*
@@ -824,7 +812,8 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 			ifp->if_flags &= ~IFF_MPE;
 		}
 		IF_AFDATA_WUNLOCK(ifp);	
-	} else {	
+	} else {
+		RT_LOCK_ASSERT(rt);	
 /*
  * Remove MPLS label binding scoped on set containing fec.
  */			
@@ -853,6 +842,9 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 			rt->rt_mtu += MPLS_HDRLEN;
 			rt->rt_flags &= ~RTF_MPE;
 		} else {
+/*
+ * Terminate enclosed Incoming Label Map (ilm).
+ */			
 			error = rtrequest_fib((int)RTM_DELETE, 
 				mia->mia_addr, 
 				mia->mia_dstaddr, 
@@ -930,9 +922,10 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
  */
 	if (rt == NULL) 
 		ifa = ifp->if_addr;
-	else
+	else {
+		RT_LOCK_ASSERT(rt);
 		ifa = rt->rt_ifa;
-		
+	}
 	ifa_ref(ifa);	
 /*
  * XXX; ugly... but I'll reimplement this...
@@ -1044,14 +1037,14 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 			}
 		} else {
 /*
- * Generate by nhlfe enclosed Incoming Label Map (ilm). 
+ * Generate by nhlfe enclosed ilm. 
  */			
 			error = rtrequest_fib((int)RTM_ADD, 
 				mia->mia_addr, 
 				mia->mia_dstaddr, 
 				mia->mia_netmask, 
 				mia->mia_rt_flags, 
-				&ilm, ifp->if_fib);
+				&ilm, 0);
 
 			if (ilm != NULL) {			
 				RT_LOCK(ilm);

@@ -85,8 +85,8 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
 
                  net/        
                  
-                  Extensions for inclusion mapping in AF_MPLS domain on         
-                  interface layer.
+                  Extensions implements inclusion mapping in AF_MPLS domain 
+                  on interface-layer.
    
                   if.c      
                             
@@ -926,7 +926,7 @@ Otherwise, the fec is implemented by rtentry(9). Therefore, by ifa_dstaddr
 referred socket address on nhlfe holds an extended copy from fec inherited
 address x. 
     Regarding at the beginning on implementation notes defined terminology,
-any ilm occours as
+any ilm occours as by nhlfe enclosed rtentry(9)
 
         + rt_key (seg_in)               .       + MPLS label (seg_out)
         |                               .       |
