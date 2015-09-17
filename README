@@ -922,10 +922,10 @@ or
  (b) the destination address x 
  
 from its enclosing fec. Due to case of aggregate set of routes, by ifnet(9) 
-implemented link-layer interface provides fec itself as reflexive mapping. 
-Otherwise, the fec is implemented by rtentry(9). Therefore, by ifa_dstaddr
-referred socket address on nhlfe holds an extended copy from fec inherited
-address x. 
+implemented link-layer interface provides fec itself through reflexive mapping. 
+Otherwise, the fec is implemented by rtentry(9) as mentioned before. Therefore, 
+by ifa_dstaddr referred socket address on nhlfe holds an extended copy from its
+enclosing fec inherited address x. 
     Regarding at the beginning on implementation notes defined terminology,
 any ilm occours as by nhlfe enclosed rtentry(9)
 
