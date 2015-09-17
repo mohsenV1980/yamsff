@@ -439,7 +439,7 @@ mpe_start(struct ifnet *ifp)
 /*
  * Encapsulate received packets and 
  * perform transmission by proxyfied
- * link layer interface. 
+ * interface on link-layer. 
  */ 
 static int
 mpe_output(struct ifnet *ifp, struct mbuf *m, 
@@ -447,7 +447,6 @@ mpe_output(struct ifnet *ifp, struct mbuf *m,
 {
 	struct mpls_ro mplsroute;
 	struct mpls_ro *mro;
-	struct sockaddr *nh;
 	struct sockaddr *gw;
 	struct mpe_softc *sc;
 	struct mbuf *m0;
@@ -458,6 +457,7 @@ mpe_output(struct ifnet *ifp, struct mbuf *m,
 	
 	mro = &mplsroute;
 	bzero(mro, sizeof(*mro));
+	gw = sftntosa(&mro->mro_gw);
 	
 	if (ro == NULL)
 		ro = (struct route *)mro;
@@ -483,7 +483,7 @@ mpe_output(struct ifnet *ifp, struct mbuf *m,
 	}
 	af = dst->sa_family;
 /*
- * By bpf(4) defined iap.
+ * Handoff into bpf(4), Inspection Access Point (iap).
  */		
 	BPF_MTAP2(ifp, &af, sizeof(af), m);
 	
@@ -501,13 +501,11 @@ mpe_output(struct ifnet *ifp, struct mbuf *m,
 		if (af == AF_MPLS)
 			mro->mro_flags |= RTF_STK;
 
-		nh = mro->mro_ifa->ifa_dstaddr;
-
-		if ((m = mpls_encap(m, nh, mro)) == NULL) {
+		m = mpls_encap(m, mro->mro_ifa->ifa_dstaddr, mro);
+		if (m == NULL) {
 			ifp->if_oerrors++;
 			continue;
 		} 
-		gw = sftntosa(&mro->mro_gw);
 /*
  * If instance maps to itself, loop back.
  */		
