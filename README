@@ -1,7 +1,9 @@
 Yet another MPLS stack for FreeBSD (yamsff)
 ===========================================
 
-This software is derived from MPLS implementation in OpenBSD 4.7 release.
+This software is derived from MPLS implementation of OpenBSD operating system.
+ 
+ o https://2011.eurobsdcon.org/papers/jeker/MPLS.pdf
  
  o http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/sys/netmpls/
  o http://cvsweb.openbsd.org/cgi-bin/cvsweb/src/sys/net/if_mpe.c

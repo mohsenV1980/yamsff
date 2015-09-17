@@ -338,7 +338,7 @@ mpls_link_rtrequest(int cmd, struct rtentry *fec, struct rt_addrinfo *rti)
 	switch (cmd) {
 	case RTM_ADD:
 		break;
-	case RTM_CHANGE:	
+	case RTM_CHANGE:
 	case RTM_DELETE:
 /*
  * Build subset.
@@ -843,7 +843,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 			rt->rt_flags &= ~RTF_MPE;
 		} else {
 /*
- * Terminate enclosed Incoming Label Map (ilm).
+ * Terminate by nhlfe enclosed Incoming Label Map (ilm).
  */			
 			error = rtrequest_fib((int)RTM_DELETE, 
 				mia->mia_addr, 
@@ -859,7 +859,7 @@ mpls_ifscrub(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt)
 	bzero(&sftn, sizeof(sftn));
 	seg = (struct sockaddr *)&sftn;
 /*
- * Remove corrosponding llentry{}.
+ * Remove corrosponding llentry{} on MPLS_ARP cache.
  */		
  	seg->sa_len = SMPLS_LEN;
 	seg->sa_family = AF_MPLS;
@@ -913,10 +913,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	(void)printf("%s\n", __func__);
 #endif /* MPLS_DEBUG */
 
-/*
- * Apply flags and inclusion mapping on fec.
- */	
-	mia->mia_rt_flags = flags;	
+
 /*
  * Prepare storage for gateway address and < op, seg_out, rd >.	
  */
@@ -948,7 +945,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	
 	len = gw->sa_len - offsetof(struct sockaddr, sa_data);
 	bcopy(gw->sa_data, sftn.sftn_data, len);	
-	
+		
 	sftn.sftn_op = flags & RTF_MPLS_OMASK;
 	
 	if (flags & RTF_PUSH)  
@@ -964,8 +961,10 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 	mia->mia_addr->sa_len = SMPLS_LEN;
 	mia->mia_addr->sa_family = AF_MPLS;
 	satosmpls_label(mia->mia_addr) = satosmpls_label(sa) & MPLS_LABEL_MASK;	
+
+	mia->mia_rt_flags = flags;		
 /*
- * Create llentry{} by SIOCSIFADDR triggered inclusion mapping.
+ * Create llentry{} on MPLS_ARP cache by SIOCSIFADDR command.
  */		
 	error = (*ifp->if_ioctl)(ifp, SIOCSIFADDR, (void *)mia);
 	if (error != 0) 	
@@ -1044,7 +1043,7 @@ mpls_ifinit(struct ifnet *ifp, struct mpls_ifaddr *mia, struct rtentry *rt,
 				mia->mia_dstaddr, 
 				mia->mia_netmask, 
 				mia->mia_rt_flags, 
-				&ilm, 0);
+				&ilm, ifp->if_fib);
 
 			if (ilm != NULL) {			
 				RT_LOCK(ilm);
