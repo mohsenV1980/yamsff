@@ -898,8 +898,8 @@ sdu maps to fec'
  
 denotes fastpath into AF_MPLS domain will be encapsulated by mpls_encap during
 runtime of mpls_output.
-    It is obvious, any by fec enclosed MPLS label binding generates fec' denotes 
-fastpath does not generates an ilm. An ilm is an instance of rtentry(9) on RADIX 
+    It is obvious, any by fec enclosed MPLS label binding generates fec' denotes
+fastpath does not generates an ilm. An ilm is an instance of rtentry(9) on RADIX
 Trie in AF_MPLS domain, where its key is implemented by
  
     struct sockaddr_mpls {
