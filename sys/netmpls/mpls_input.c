@@ -454,18 +454,13 @@ do_link:
 		switch (satosftn_op(mro->mro_ilm->rt_gateway)) {
 		case RTF_POP:				
 /*
- * If BoS, pop MPLS label and re-iterate.
+ * If not BoS, pop MPLS label and re-iterate.
  */
 			if (hasbos == 0) {
 
-				if ((m = mpls_shim_pop(m)) == NULL) 
-					break;
+				if ((m = mpls_shim_pop(m)) != NULL) 
+					mro->mro_flags |= RTF_STK;
 				
-				if (ifp->if_bridge != NULL) {
-					shim = mtod(m, struct shim_hdr *);	
-					mpls_rtfree(mro);
-					continue;
-				} 
 				break;		
 			}
 /*
