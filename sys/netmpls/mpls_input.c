@@ -143,7 +143,7 @@ static void	mpls_dummynet(struct mbuf *, struct ifnet *);
 
 static void 	mpls_input(struct mbuf *);
  
-void	mpls_forward(struct mbuf *, int);
+void	mpls_forward(struct mbuf *);
 void	mpls_init(void);
 
 static void 	mpls_bridge_if(void *arg __unused, struct ifnet *, int);
@@ -207,7 +207,7 @@ mpls_dummynet(struct mbuf *m, struct ifnet *ifp)
 	bcopy(&mtm->mtm_stk, mtod(m, caddr_t), mtm->mtm_size);
 	m_tag_delete(m, &mtm->mtm_tag);
 	
-	mpls_forward(m, 0);
+	mpls_forward(m);
 }
 
 /*
@@ -268,7 +268,7 @@ mpls_input(struct mbuf *m)
 	(void)printf("%s: on=%s \n", __func__, ifp->if_xname);
 #endif /* MPLS_DEBUG */
 
-	mpls_forward(m, 0);
+	mpls_forward(m);
 	return;	
 bad:
 	m_freem(m);	
@@ -300,11 +300,10 @@ bad:
  *     if possible. 
  */
 void
-mpls_forward(struct mbuf *m, int off __unused)
+mpls_forward(struct mbuf *m)
 {
 	struct ifnet *ifp = NULL;
 	struct mpls_ro mplsroute;
-	struct route *ro;
 	struct mpls_ro *mro;
 	
 	struct shim_hdr *shim;
@@ -313,10 +312,8 @@ mpls_forward(struct mbuf *m, int off __unused)
 	int i, hasbos;
 	
 	struct sockaddr_mpls *seg;
-	struct sockaddr *gw;
 	
-	ro = (struct route *)&mplsroute;
-	mro = (struct mpls_ro *)ro;
+	mro = &mplsroute;
 	bzero(mro, sizeof(*mro));
 /*
  * Map incoming segment (seg_in) and 
@@ -348,8 +345,11 @@ mpls_forward(struct mbuf *m, int off __unused)
 		
 		if (IS_RESERVED(seg->smpls_label)) {
 /*
- * Perform by reserved MPLS label bound operations. 
+ * Perform by reserved MPLS label bound operations.
  */			
+			if ((m = mpls_shim_pop(m)) == NULL)
+				goto done;
+				
 			switch (MPLS_LABEL_GET(seg->smpls_label)) {
 			case MPLS_LABEL_IPV4NULL:
 /*
@@ -390,10 +390,7 @@ do_v6:
 			case MPLS_LABEL_IMPLNULL:
 				
 				if (hasbos != 0) {
-					
-					if ((m = mpls_shim_pop(m)) == NULL)  
-						break;
-					
+				
 					switch (*mtod(m, u_char *) >> 4) {
 					case IPVERSION:
 						goto do_v4;
@@ -416,9 +413,6 @@ do_link:
 					case IFT_ETHER:
 					case IFT_FDDI:
 						
-						if ((m = mpls_shim_pop(m)) == NULL)  
-							break;
-	
 						if (mpls_empty_cw != 0) 
 							m_adj(m, MPLS_CWLEN);
 						
@@ -442,10 +436,6 @@ do_link:
  */
 				goto out;
 			}
-			
-			if ((m = mpls_shim_pop(m)) == NULL)
-				goto done;
-			
 			shim = mtod(m, struct shim_hdr *);	
 			mpls_rtfree(mro);
 			continue;
@@ -462,13 +452,12 @@ do_link:
 #endif /* MPLS_DEBUG */
 			goto out;
 		}
-		gw = mro->mro_ilm->rt_gateway;	
 		ifp = mro->mro_ilm->rt_ifp;
 
-		switch (satosftn_op(gw)) {
+		switch (satosftn_op(mro->mro_ilm->rt_gateway)) {
 		case RTF_POP:				
 /*
- * If BoS, MPLS label pop and re-iterate.
+ * If BoS, pop MPLS label and re-iterate.
  */
 			if (hasbos == 0) {
 
@@ -495,7 +484,7 @@ do_link:
 			if ((m = mpls_shim_pop(m)) == NULL) 
 				break;
 			
-			switch (gw->sa_family) {
+			switch (mro->mro_ilm->rt_gateway->sa_family) {
 			case AF_INET:				
 				goto do_v4;
 #ifdef INET6
@@ -541,9 +530,9 @@ do_link:
 	
 	seg->smpls_label = /* seg_out */
 		shim->shim_label & MPLS_LABEL_MASK;
-	gw = (struct sockaddr *)seg;
 	
-	(void)(*ifp->if_output)(ifp, m, gw, ro);
+	(void)(*ifp->if_output)
+		(ifp, m, (struct sockaddr *)seg, (struct route *)mro);
 done:
 	mpls_rtfree(mro);		
 	return;

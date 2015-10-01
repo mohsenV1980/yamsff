@@ -53,7 +53,7 @@
  
 extern struct mbuf *	mpls_shim_pop(struct mbuf *);
 extern int 	mpls_ifawithseg_check_fib(struct sockaddr *, u_int);
-extern void	mpls_forward(struct mbuf *, int);
+extern void	mpls_forward(struct mbuf *);
 
 /*
  * Template.
@@ -305,9 +305,6 @@ mpls_rtalert_input(struct mbuf *m, int off)
 {
 	struct sockaddr_mpls seg = seg_rtalert;
 	struct shim_hdr *shim;
-
-	if ((m = mpls_shim_pop(m)) == NULL)  
-		return;
 		
 	shim = mtod(m, struct shim_hdr *);
 	seg.smpls_label = (shim->shim_label & MPLS_LABEL_MASK);
@@ -357,7 +354,7 @@ mpls_rtalert_output(struct mbuf *m, struct socket *so)
 	shim->shim_label &= ~MPLS_TTL_MASK;
 	shim->shim_label |= htonl(ttl);
 
-	mpls_forward(m, 0);
+	mpls_forward(m);
 done:
 	return (error);
 bad:

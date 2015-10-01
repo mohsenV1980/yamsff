@@ -169,37 +169,6 @@ mpls_getaddr(const char *s, int which)
 }
 
 /*
- * Inclusion mapping on AF_MPLS domain.
- */
-static void
-mpls_setifflag(const char *val, int d, int s, 
-		const struct afswtch *afp)
-{
-	struct ifreq ifr;
-	int flags;
-
-	(void)memset(&ifr, 0, sizeof(ifr));
-	(void)strlcpy(ifr.ifr_name, name, sizeof(ifr.ifr_name));
-
- 	if (ioctl(s, SIOCGIFFLAGS, (caddr_t)&ifr) < 0) 
- 		errx(1, "ioctl (SIOCGIFFLAGS)");
-
-	flags = ifr.ifr_flags & 0xffff;
-	flags |= ifr.ifr_flagshigh << 16;
-
-	if (flags & IFF_MPLS)
-		flags &= ~IFF_MPLS;
-	else
-		flags |= IFF_MPLS;
-		
-	ifr.ifr_flags = flags & 0xffff;
-	ifr.ifr_flagshigh = flags >> 16;
-	
-	if (ioctl(s, SIOCSIFFLAGS, (caddr_t)&ifr) < 0)
-		errx(1, "ioctl (SIOCGIFFLAGS)");
-}
-
-/*
  * Bind link layer interface on if_mpe(4) 
  * performing proxyfied transmission. 
  */
@@ -258,8 +227,6 @@ mpls_rmproxy(const char *val, int d, int s,
  * Command table targeting if_mpe(4). 
  */
 static struct cmd mpe_cmds[] = {
-	DEF_CMD("encap",	0,	mpls_setifflag),
-	DEF_CMD("-encap",	0,	mpls_setifflag),
 	DEF_CMD_ARG("proxy", mpls_setproxy),
 	DEF_CMD("-proxy", 0, mpls_rmproxy),
 };
