@@ -564,7 +564,7 @@ mpls_pfil(struct mbuf **mp, struct ifnet *ifp, int dir)
 			m_tag_alloc(MTAG_MPLS, MTAG_MPLS_STACK, 
 				sizeof(struct m_tag_mpls), M_NOWAIT);
  	if (mtm == NULL)
- 		goto done;	
+ 		goto bad;	
 /*
  * Strip off MPLS label stack and keep a copy.
  */

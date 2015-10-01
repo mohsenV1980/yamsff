@@ -621,7 +621,9 @@ static void *
 mpe_alloc(u_char type, struct ifnet *ifp)
 {
 	struct arpcom *ac;
-
+/*
+ * Can't fail.
+ */
 	ac = malloc(sizeof(struct arpcom), M_DEVBUF, M_WAITOK|M_ZERO);
 	ac->ac_ifp = ifp;
 
