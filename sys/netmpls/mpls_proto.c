@@ -76,11 +76,7 @@ static struct pr_usrreqs nousrreqs;
 FEATURE(mpls, "Multi Protocol Label Switching");
 
 extern void	mpls_init(void);
-extern void	mpls_in_handoff(struct mbuf *, int);
-#ifdef INET6
-extern void	mpls_in6_handoff(struct mbuf *, int);
-#endif /* INET6 */
-extern void	mpls_rtalert_input(struct mbuf *, int);
+extern void	mpls_forward(struct mbuf *, int);;
 extern int	mpls_rtalert_output(struct mbuf *, struct socket *);
 
 /*
@@ -92,7 +88,7 @@ struct protosw mplssw[] = {
 	.pr_type =		0,			
 	.pr_domain =	&mplsdomain,		
 	.pr_init =		mpls_init,
-	.pr_input =		mpls_in_handoff,
+	.pr_input =		mpls_forward,
 	.pr_usrreqs	=	&nousrreqs,
 },
 { /* Raw socket for MPLS_RTALERT processing */
@@ -100,7 +96,7 @@ struct protosw mplssw[] = {
 	.pr_domain =	&mplsdomain,
 	.pr_protocol =	MPLSPROTO_RTALERT,		
 	.pr_flags =		PR_ATOMIC|PR_ADDR,
-  	.pr_input = 	mpls_rtalert_input,
+  	.pr_input = 	mpls_forward,
   	.pr_output =	mpls_rtalert_output,
   	.pr_usrreqs = 	&mpls_rtalert_usrreqs,
 },
@@ -108,21 +104,21 @@ struct protosw mplssw[] = {
 	.pr_type =		SOCK_RAW,			
 	.pr_domain =	&mplsdomain,		
 	.pr_init =		mpls_init,
-#ifdef INET6	
-	.pr_input =		mpls_in6_handoff,
-#endif /* INET6 */	
+	.pr_input =		mpls_forward,
 	.pr_usrreqs	=	&nousrreqs,
 },
 { /* control socket */
 	.pr_type =		SOCK_DGRAM,		
 	.pr_domain =	&mplsdomain,	
 	.pr_flags =		PR_ATOMIC|PR_ADDR,
+	.pr_input =		mpls_forward,	
   	.pr_usrreqs = 	&mpls_raw_usrreqs,
 },
 { /* raw wildcard */
 	.pr_type =		SOCK_RAW,		
 	.pr_domain =	&mplsdomain,	
 	.pr_flags =		PR_ATOMIC|PR_ADDR,
+	.pr_input =		mpls_forward,
   	.pr_usrreqs = 	&mpls_raw_usrreqs,
 },
 };

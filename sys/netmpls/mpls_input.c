@@ -115,35 +115,23 @@ extern struct mbuf *	mpls_shim_swap(struct mbuf *, struct mpls_ro *);
 extern struct mbuf *	mpls_shim_push(struct mbuf *, struct mpls_ro *);
 extern void	mpls_rtalert_input(struct mbuf *, int);
 
-/*
- * Implements basic condition tests on encapsulated sdu 
- */
-int	mpls_ip_checkbasic(struct mbuf **);
-#ifdef INET6
-int	mpls_ip6_checkbasic(struct mbuf **);
-#endif /* INET6 */
-
-/*
- * IAP.
- */
-int	mpls_pfil(struct mbuf **, struct ifnet *, int);
-
-/*
- * Handoff into protocol-layer.
- */
-struct mbuf * 	mpls_ip_adjttl(struct mbuf *, uint8_t);
-#ifdef INET6
-struct mbuf * 	mpls_ip6_adjttl(struct mbuf *, uint8_t);
-#endif /* INET6 */
-void	mpls_in_handoff(struct mbuf *, int);
-#ifdef INET6
-void	mpls_in6_handoff(struct mbuf *, int);
-#endif /* INET6 */
+extern struct protosw mplssw[];
 
 /*
  * Input processing and forwarding.
  */
-	
+
+int	mpls_ip_checkbasic(struct mbuf **);
+#ifdef INET6
+int	mpls_ip6_checkbasic(struct mbuf **);
+#endif /* INET6 */
+int	mpls_pfil(struct mbuf **, struct ifnet *, int);
+
+struct mbuf * 	mpls_ip_adjttl(struct mbuf *, uint8_t);
+#ifdef INET6
+struct mbuf * 	mpls_ip6_adjttl(struct mbuf *, uint8_t);
+#endif /* INET6 */
+
 static int	mpls_ip_fragment(struct ifnet *, struct mbuf *, 
 	struct shim_hdr *, size_t);
 static struct mbuf *	mpls_icmp_reflect(struct mbuf *);
@@ -158,9 +146,6 @@ static void 	mpls_input(struct mbuf *);
 void	mpls_forward(struct mbuf *, int);
 void	mpls_init(void);
 
-/*
- * Eventhandler for if_bridge(4).
- */
 static void 	mpls_bridge_if(void *arg __unused, struct ifnet *, int);
 
 /*
@@ -246,9 +231,7 @@ static void
 mpls_input(struct mbuf *m)
 {	
 	struct ifnet *ifp;
-	struct shim_hdr	*shim;
-	uint32_t hasbos;
-	
+
 	M_ASSERTPKTHDR(m);
 	
 	if (m->m_flags & (M_BCAST|M_MCAST)) 
@@ -268,7 +251,7 @@ mpls_input(struct mbuf *m)
 	if ((ifp->if_flags & IFF_MPLS) == 0)
 		goto bad;
 /* 
- * Defines iap for pfil(9) processing.
+ * Service Access Point (sap) for Inspection Access Point (iap) on pfil(9).
  */
 	if (PFIL_HOOKED(&V_inet_pfil_hook)
 #ifdef INET6
@@ -280,47 +263,12 @@ mpls_input(struct mbuf *m)
 		if (m == NULL)
 			return;
 	}
-	shim = mtod(m, struct shim_hdr *);
-	hasbos = MPLS_BOS(shim->shim_label);
 
 #ifdef MPLS_DEBUG
 	(void)printf("%s: on=%s \n", __func__, ifp->if_xname);
 #endif /* MPLS_DEBUG */
 
-	switch (MPLS_LABEL_GET(shim->shim_label)) {
-	case MPLS_LABEL_IPV4NULL:	/* FALLTHROUGH */
-#ifdef INET6
-	case MPLS_LABEL_IPV6NULL:
-#endif /* INET6 */
-/*
- * Rfc-4182 relaxes the position of the explicit NULL labels. There is no
- * longer need to be at the beginning of the stack.
- */
-		if (hasbos == 0) 
-			goto bad;
-					
-		break;
-	case MPLS_LABEL_RTALERT:
-/*
- * Must be on top of stack.
- */		
-		if (hasbos != 0)
-			goto bad;
-				
-		break;
-	default:
-		mpls_forward(m, 0);
-		return;
-	}
-
-#ifdef MPLS_DEBUG
-	(void)printf(" | rx: label %d ttl %d bos %d\n", 
-		MPLS_LABEL_GET(shim->shim_label), 
-		MPLS_TTL_GET(shim->shim_label), 
-		MPLS_BOS(shim->shim_label));
-#endif /* MPLS_DEBUG */	
-	
-	(*mplssw[MPLS_LABEL_GET(shim->shim_label)].pr_input)(m, 0);
+	mpls_forward(m, 0);
 	return;	
 bad:
 	m_freem(m);	
@@ -410,7 +358,10 @@ mpls_forward(struct mbuf *m, int off __unused)
  */
 				if (hasbos != 0) {
 do_v4:
-					mpls_in_handoff(m, 0);
+					m = mpls_ip_adjttl(m, ttl);
+					if (m != NULL)
+						netisr_dispatch(NETISR_IP, m);
+				
 					goto done;
 				} 
 				break;
@@ -428,7 +379,10 @@ do_v4:
 				
 				if (hasbos != 0) {
 do_v6:				
-					mpls_in6_handoff(m, 0);
+					m = mpls_ip6_adjttl(m, ttl);
+					if (m != NULL)
+						netisr_dispatch(NETISR_IPV6, m);
+	
 					goto done;
 				}
 				break;
@@ -436,6 +390,10 @@ do_v6:
 			case MPLS_LABEL_IMPLNULL:
 				
 				if (hasbos != 0) {
+					
+					if ((m = mpls_shim_pop(m)) == NULL)  
+						break;
+					
 					switch (*mtod(m, u_char *) >> 4) {
 					case IPVERSION:
 						goto do_v4;
@@ -534,6 +492,9 @@ do_link:
 /*
  * Handoff into protocol- or link-layer.
  */				
+			if ((m = mpls_shim_pop(m)) == NULL) 
+				break;
+			
 			switch (gw->sa_family) {
 			case AF_INET:				
 				goto do_v4;
@@ -910,8 +871,9 @@ mpls_do_error(struct mbuf *m, int destmtu)
 	struct ip *ip;
 	size_t hlen;
 	struct icmp *icp;
-	
-
+/*
+ * Strip off MPLS label stack and keep a copy.
+ */	
 	for (nstk = 0; nstk < MPLS_INKERNEL_LOOP_MAX; nstk++) {
 		if (m->m_len < MPLS_HDRLEN) {
 		    if ((m = m_pullup(m, MPLS_HDRLEN)) == NULL)
@@ -1242,33 +1204,6 @@ out:
 	return (error);
 }
 
-/*
- * Stripp of MPLS label and pass mbuf(9) into protocol layer.
- */
-void
-mpls_in_handoff(struct mbuf *m, int off)
-{
-	struct shim_hdr *shim;
-	uint32_t ttl; 
-	
-#ifdef MPLS_DEBUG
-	(void)printf("%s\n",__func__);
-	
-	if (m == NULL)
-		return;
-#endif /* MPLS_DEBUG */
-	
-	shim = mtod(m, struct shim_hdr *);
-	ttl = ntohl(shim->shim_label & MPLS_TTL_MASK);
-	
-	if ((m = mpls_shim_pop(m)) == NULL)  
-		return;
-
-	if ((m = mpls_ip_adjttl(m, ttl)) == NULL)
-		return;
-	
-	netisr_dispatch(NETISR_IP, m);
-}
 
 struct mbuf * 
 mpls_ip_adjttl(struct mbuf *m, uint8_t ttl)
@@ -1303,31 +1238,6 @@ out:
 } 
 
 #ifdef INET6
-void
-mpls_in6_handoff(struct mbuf *m, int off)
-{
-	struct shim_hdr *shim;
-	uint8_t ttl;
-
-#ifdef MPLS_DEBUG
-	(void)printf("%s\n",__func__);
-	
-	if (m == NULL)
-		return;
-#endif /* MPLS_DEBUG */
-
-	shim = mtod(m, struct shim_hdr *);
-	ttl = MPLS_TTL_GET(shim->shim_label);
-
-	if ((m = mpls_shim_pop(m)) == NULL)  
-		return;
-	
-	if ((m = mpls_ip6_adjttl(m, ttl)) == NULL)
-		return;
-
-	netisr_dispatch(NETISR_IPV6, m);
-}
-
 struct mbuf * 
 mpls_ip6_adjttl(struct mbuf *m, uint8_t ttl)
 {
@@ -1348,8 +1258,9 @@ out:
 
 
 /*
- * Event handler, associate MPLS_RD_ETHDEMUX MPLS route distinguisher with
- * nhlfe.
+ * Eventhandler for if_bridge(4).
+ *
+ * Associate MPLS_RD_ETHDEMUX MPLS route distinguisher with nhlfe.
  *
  * This procedure is called by bridge(4), if instance of if_mpe(4) is either
  * assumed to be member by operation maps to BRDGADD (RTM_ADD) or will be

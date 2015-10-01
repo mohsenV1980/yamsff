@@ -67,7 +67,7 @@ DPADD+= ${LIBJAIL}
 LDADD+= -ljail
 .endif
 
-CFLAGS+= -DMPLS
+FLAGS+= -DMPLS
 
 MAN=	ifconfig.8
 

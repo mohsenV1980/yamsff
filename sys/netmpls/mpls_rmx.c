@@ -220,7 +220,7 @@ mpls_rt_output_fib(struct rt_msghdr *rtm, struct rt_addrinfo *rti,
  * Fetch interface by Forward Equivalence Class (fec).
  */	
  	fec = rtalloc1_fib(rti_dst(rti), 0, 0UL, fibnum);
-	if ((fec == NULL) 		
+	if ((fec == NULL) 
 		|| (fec->rt_gateway == NULL) 
 		|| ((ifp = fec->rt_ifp) == NULL)
 		|| (fec->rt_ifa == NULL) 

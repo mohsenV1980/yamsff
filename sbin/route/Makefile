@@ -18,7 +18,7 @@ CFLAGS+= -DINET6
 .endif
 CFLAGS+= -I.
 
-CFLAGS+= -DMPLS
+FLAGS+= -DMPLS
 
 keywords.h: keywords
 	LC_ALL=C awk '!/^#|^$$/ { \
