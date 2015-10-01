@@ -356,15 +356,13 @@ mpls_forward(struct mbuf *m)
  * RFC 4182 relaxes the position of the explicit NULL labels. 
  * They no longer need to be at the beginning of the stack.
  */
-				if (hasbos != 0) {
+				if (hasbos == 0) 
+					break;		
 do_v4:
-					m = mpls_ip_adjttl(m, ttl);
-					if (m != NULL)
-						netisr_dispatch(NETISR_IP, m);
+				if ((m = mpls_ip_adjttl(m, ttl)) != NULL)
+					netisr_dispatch(NETISR_IP, m);
 				
-					goto done;
-				} 
-				break;
+				goto done;
 			case MPLS_LABEL_RTALERT:
 /*
  * Pass pdu into socket-layer.
@@ -376,33 +374,32 @@ do_v4:
 				goto done;
 #ifdef INET6
 			case MPLS_LABEL_IPV6NULL:
-				
-				if (hasbos != 0) {
+			
+				if (hasbos == 0) 
+					break;
 do_v6:				
-					m = mpls_ip6_adjttl(m, ttl);
-					if (m != NULL)
-						netisr_dispatch(NETISR_IPV6, m);
+				if ((m = mpls_ip6_adjttl(m, ttl)) != NULL)
+					netisr_dispatch(NETISR_IPV6, m);
 	
-					goto done;
-				}
+				goto done;
 				break;
 #endif /* INET6 */
 			case MPLS_LABEL_IMPLNULL:
 				
-				if (hasbos != 0) {
+				if (hasbos == 0)
+					break;
 				
-					switch (*mtod(m, u_char *) >> 4) {
-					case IPVERSION:
-						goto do_v4;
+				switch (*mtod(m, u_char *) >> 4) {
+				case IPVERSION:
+					goto do_v4;
 #ifdef INET6
-					case IPV6_VERSION >> 4:
-						goto do_v6;
+				case IPV6_VERSION >> 4:
+					goto do_v6;
 #endif /* INET6 */
-					default:
-						goto out; 
-					}
+				default:
+					break; 
 				}
-				break;
+				goto out;
 			case MPLS_RD_ETHDEMUX:
 /*
  * Decapsulate and broadcast frame.
