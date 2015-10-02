@@ -820,8 +820,9 @@ match:
 			struct mbuf *m_hold, *m_hold_next;
 #ifdef MPLS
 			struct mpls_ro mplsroute;
-			struct sockaddr_mpls *seg;
 			struct route *ro;
+			struct shim_hdr *shim;
+			struct sockaddr_mpls *seg;
 #endif /* MPLS */		
 			m_hold = la->la_hold;
 			la->la_hold = NULL;
@@ -831,9 +832,7 @@ match:
 			ro = (struct route *)&mplsroute;
 			ro->ro_lle = la;
 		
-			(void)memcpy(&ro->ro_dst, L3_ADDR(la), 
-				L3_ADDR(la)->sa_len);
-			seg = (struct sockaddr_mpls *)&ro->ro_dst;
+			(void)memcpy(&sa, L3_ADDR(la), sizeof(sa));
 #else
 			memcpy(&sa, L3_ADDR(la), sizeof(sa));
 #endif /* MPLS */
@@ -845,18 +844,18 @@ match:
 				m_clrprotoflags(m_hold);
 #ifdef MPLS
 				if (m->m_flags & M_MPLS) {
-					struct shim_hdr *shim;
+					shim = mtod(m_hold, struct shim_hdr *);
 /*
  * Rebuild gateway address, if cached mbuf(9) originates AF_MPLS.
- */								
-					shim = mtod(m_hold, struct shim_hdr *);
+ */
+					seg = (struct sockaddr_mpls *)&ro->ro_dst;
 					
 					seg->smpls_len = SMPLS_LEN;
 					seg->smpls_family = AF_MPLS;
 					seg->smpls_label = 
 							shim->shim_label & MPLS_LABEL_MASK;
 /*
- * Fetch corrosponding Next Hop Forwarding Entry (nhlfe).
+ * Fetch corrosponding Next Hop Label Forwarding Entry (nhlfe).
  */			
 					IF_ADDR_RLOCK(ifp);
 					TAILQ_FOREACH(ifa, 
@@ -874,7 +873,8 @@ match:
 						}
 					}
 					IF_ADDR_RUNLOCK(ifp);
-				}
+				} else
+					(void)memcpy(&ro->ro_dst, &sa, sa.sa_len);
 				
 				(void)(*ifp->if_output)
 					(ifp, m_hold, &ro->ro_dst, ro);
