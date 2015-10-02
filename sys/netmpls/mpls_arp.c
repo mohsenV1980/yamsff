@@ -242,7 +242,10 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
  */	
 	m->m_flags |= M_MPLS;	
 /*
- * Resolve LLA by held rtentry(9) either denotes ilm or fec'.
+ * Resolve LLA by held rtentry(9) either 
+ * denotes ilm or fec'. Otherwise, by 
+ * enclosing Next Hop Label Forwarding
+ * entry. 
  */	
 	if (mpls_arp == 0) {
 		struct ifaddr *ifa;
@@ -286,9 +289,9 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 			break;
 #ifdef INET6 
 		case AF_INET6: 
-			error = nd6_storelladdr(ifp, m, gw, (u_char *)lla, lle);		
-#endif /* INET6 */
-			break;		
+			error = nd6_storelladdr(ifp, m, gw, (u_char *)lla, lle);	
+			break;	
+#endif /* INET6 */		
 		default:													
 			error = EAFNOSUPPORT;
 			goto bad;
@@ -677,7 +680,8 @@ found:
 #endif /* MPLS_DEBUG */
 
 				(void)(*ifp0->if_output)
-					(ifp0, m_hold, (struct sockaddr *)seg, NULL);
+					(ifp0, m_hold, (struct sockaddr *)seg, 
+						(struct route *)mro);
 			}
 		} else
 			LLE_WUNLOCK(mro->mro_lle); 
