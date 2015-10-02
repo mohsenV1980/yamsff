@@ -517,7 +517,7 @@ mpls_arpinput(struct mbuf *m)
 		goto done;	
 
 	mro = &mplsroute;
-	bzero(mro, sizeof(mro));
+	bzero(mro, sizeof(*mro));
 	seg = (struct sockaddr_mpls *)&mro->mro_gw;
 /*
  * Get particular lsp.
