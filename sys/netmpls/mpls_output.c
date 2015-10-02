@@ -93,8 +93,8 @@ int
 mpls_output(struct ifnet *ifp, struct mbuf *m, 
 		const struct sockaddr *dst, struct route *ro)
 {	
-	struct mpls_ro mplsroute;
 	struct mpls_ifinfo *mii;
+	struct mpls_ro mplsroute;
 	struct mpls_ro *mro;
 	struct sockaddr *gw;
 	
@@ -123,7 +123,7 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 	IF_AFDATA_RUNLOCK(ifp);
 	
 	mro = &mplsroute;
-	bzero(mro, sizeof(mro));
+	bzero(mro, sizeof(*mro));
 	
 	if (ro == NULL) 
 		ro = (struct route *)mro;	
