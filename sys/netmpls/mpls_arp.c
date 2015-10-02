@@ -273,11 +273,10 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 		}
 		goto out;	
 	}
+	error = ECONNABORTED;
 /*
  * Resolve LLA by MPLS label (seg_out) on cache in AF_MPLS.
  */			
-	error = ECONNABORTED;
-
 	IF_AFDATA_RLOCK(ifp);
 	la = lla_lookup(MPLS_LLTABLE(ifp), 0, dst);
 	IF_AFDATA_RUNLOCK(ifp);
@@ -434,7 +433,7 @@ mpls_arpinput(struct mbuf *m)
 	struct mpls_ro mplsroute;
 	struct mpls_ro *mro;
 	struct sockaddr_mpls *seg;
-	struct sockaddr *gw;
+	
 	struct ifnet *ifp;
 /*
  * Interface is reused for tx replies.
@@ -524,17 +523,17 @@ mpls_arpinput(struct mbuf *m)
 #endif /* MPLS_DEBUG */
 			break;
 		}
-		gw = mro->mro_ilm->rt_gateway;	
 		ifp = mro->mro_ilm->rt_ifp;
 		
-		if (mpls_proxy_arp != 0 && satosftn_op(gw) != RTF_POP) {			
-			seg->smpls_label = satosftn_label(gw);
-			
+		if ((mpls_proxy_arp != 0) 
+			&& (satosftn_op(mro->mro_ilm->rt_gateway) != RTF_POP)) {			
 /* 
  * Request lla downstream, if enabled.
- */					
+ */	
+			seg->smpls_label = 
+				satosftn_label(mro->mro_ilm->rt_gateway);			
+				
 			mpls_arprequest(ifp, seg, IF_LLADDR(ifp));
-			gw = (struct sockaddr *)&seg;
 		}
 /*
  * Reply ucast lla upstream.
@@ -552,12 +551,10 @@ mpls_arpinput(struct mbuf *m)
 		m->m_flags &= ~(M_BCAST|M_MCAST);
 		m->m_flags |= M_MPLS;
 		
-		gw = (struct sockaddr *)&seg;
-		satosmpls_label(gw) = 0;
-		gw->sa_family = AF_ARP;
-		gw->sa_len = 2;
+		seg->smpls_family = AF_ARP;
+		seg->smpls_len = 2;
 		
-		(void)(*ifp0->if_output)(ifp0, m, gw, NULL);	
+		(void)(*ifp0->if_output)(ifp0, m, (struct sockaddr *)seg, NULL);	
 		
 		drop = 0;
 		break;		
@@ -615,10 +612,9 @@ found:
 		if (mro->mro_ifa == NULL)
 			break;
 		
-		gw = (struct sockaddr *)&seg;
-
 		IF_AFDATA_LOCK(ifp0);
-		mro->mro_lle = lla_lookup(MPLS_LLTABLE(ifp0), flags, gw);
+		mro->mro_lle = lla_lookup(MPLS_LLTABLE(ifp0), 
+			flags, (struct sockaddr *)seg);
 		IF_AFDATA_UNLOCK(ifp0);
 		
 		if (mro->mro_lle == NULL) {
@@ -645,7 +641,7 @@ found:
 			mro->mro_lle->la_hold = NULL;
 			mro->mro_lle->la_numheld = 0;
 			
-			satosmpls_label(gw) = MPLS_SEG(mro->mro_lle)->smpls_label;
+			seg->smpls_label = MPLS_SEG(mro->mro_lle)->smpls_label;
 			
 			LLE_WUNLOCK(mro->mro_lle);
 			
@@ -658,7 +654,8 @@ found:
 	(void)printf(" mpls_arp: ");  
 #endif /* MPLS_DEBUG */
 
-				(void)(*ifp0->if_output)(ifp0, m_hold, gw, NULL);
+				(void)(*ifp0->if_output)
+					(ifp0, m_hold, (struct sockaddr *)seg, NULL);
 			}
 		} else
 			LLE_WUNLOCK(mro->mro_lle); 
