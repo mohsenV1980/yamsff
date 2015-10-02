@@ -245,20 +245,41 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
  * Resolve LLA by held rtentry(9) either denotes ilm or fec'.
  */	
 	if (mpls_arp == 0) {
+		struct ifaddr *ifa;
 		struct sockaddr *gw;
 		
-		error = EINVAL;
+		if (rt == NULL) {
+			IF_ADDR_RLOCK(ifp);
+			TAILQ_FOREACH(ifa, 
+				&ifp->if_addrhead, ifa_link) {
 	
-		if (rt == NULL) 
-			goto bad;
-		
-		if (rt->rt_flags & RTF_MPLS)
+				if ((ifa->ifa_flags & IFA_NHLFE) == 0)
+					continue;
+	
+				if (satosftn_label(ifa->ifa_dstaddr) == 
+					seg->smpls_label) {
+					ifa_ref(ifa);		
+					break;
+				}
+			}
+			IF_ADDR_RUNLOCK(ifp);
+			
+			if (ifa == NULL) {
+				error = EHOSTUNREACH;
+				goto bad;
+			}
+			gw = ifa->ifa_dstaddr;
+			ifa_free(ifa);
+
+		} else if (rt->rt_flags & RTF_MPLS)
 			gw = rt->rt_gateway;
 		else if (rt->rt_flags & RTF_MPE) 
 			gw = rt_key(rt);
-		else 
-			goto bad;
-			
+		else {
+			error = EINVAL;
+			goto bad;	
+		}
+		
 		switch (gw->sa_family) {
 		case AF_INET:			
 			error = arpresolve(ifp, rt, m, gw, lla, lle);	
@@ -269,6 +290,7 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 #endif /* INET6 */
 			break;		
 		default:													
+			error = EAFNOSUPPORT;
 			goto bad;
 		}
 		goto out;	
