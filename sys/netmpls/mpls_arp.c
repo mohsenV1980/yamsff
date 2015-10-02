@@ -195,7 +195,7 @@ SYSCTL_INT(_net_link_ether_mpls, OID_AUTO, arp_maxtries, CTLFLAG_RW,
 #define SMPLS(s) ((struct sockaddr_mpls *)s)
 #define SDL(s) ((struct sockaddr_dl *)s)
 
-static void 	mpls_arprequest(struct ifnet *, const struct sockaddr *, 
+static void 	mpls_arprequest(struct ifnet *, const struct sockaddr_mpls *, 
 	u_char *);
 
 int 	mpls_arp_ifinit(struct ifnet *, struct ifaddr *);
@@ -215,57 +215,69 @@ int
 mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 		const struct sockaddr *dst, u_char *lla, struct llentry **lle)
 { 
+	struct sockaddr_mpls *seg;
+	
 	struct llentry *la;
 	struct mbuf *curr;
 	struct mbuf *next; 
+
 	int error;
 	
 	*lle = NULL;
-/*
- * Annotate mbuf(9).
- */	
-	m->m_flags |= M_MPLS;
+	
+	seg = (struct sockaddr_mpls *)dst;
 	
 	if ((ifp->if_flags & IFF_MPLS) == 0) {
 		error = ENXIO;
 		goto bad;
-	}	
+	}
+	
+	if (m->m_flags & M_BCAST) {
+		bcopy(ifp->if_broadcastaddr, lla, ifp->if_addrlen);
+		error = 0;
+		goto out;
+	}
 /*
- * Resolve lla by held rtentry(9) maps to.
+ * Annotate mbuf(9).
+ */	
+	m->m_flags |= M_MPLS;	
+/*
+ * Resolve LLA by held rtentry(9) either denotes ilm or fec'.
  */	
 	if (mpls_arp == 0) {
+		struct sockaddr *gw;
+		
 		error = EINVAL;
 	
 		if (rt == NULL) 
 			goto bad;
 		
-		if ((rt->rt_flags & (RTF_MPLS|RTF_MPE)) == 0)
+		if (rt->rt_flags & RTF_MPLS)
+			gw = rt->rt_gateway;
+		else if (rt->rt_flags & RTF_MPE) 
+			gw = rt_key(rt);
+		else 
 			goto bad;
 			
-		switch (rt->rt_gateway->sa_family) {
+		switch (gw->sa_family) {
 		case AF_INET:			
-			error = arpresolve(ifp, rt, m, rt->rt_gateway, lla, lle);	
+			error = arpresolve(ifp, rt, m, gw, lla, lle);	
 			break;
 #ifdef INET6 
 		case AF_INET6: 
-			error = nd6_storelladdr(ifp, m, 
-				rt->rt_gateway, (u_char *)lla, lle);		
+			error = nd6_storelladdr(ifp, m, gw, (u_char *)lla, lle);		
 #endif /* INET6 */
 			break;		
 		default:													
 			goto bad;
 		}
 		goto out;	
-	}		
-	error = ECONNABORTED;
-/*
- * Resolve by MPLS_ARP.
- */			
-	if (m->m_flags & M_BCAST) {
-		bcopy(ifp->if_broadcastaddr, lla, ifp->if_addrlen);
-		error = 0;
-		goto out;
 	}
+/*
+ * Resolve LLA by MPLS label (seg_out) on cache in AF_MPLS.
+ */			
+	error = ECONNABORTED;
+
 	IF_AFDATA_RLOCK(ifp);
 	la = lla_lookup(MPLS_LLTABLE(ifp), 0, dst);
 	IF_AFDATA_RUNLOCK(ifp);
@@ -274,7 +286,7 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 		log(LOG_DEBUG,
 			"%s: seg: %d software caused "
 			"connection abort\n", __func__,
-			MPLS_LABEL_GET(satosmpls_label(dst)));	
+			MPLS_LABEL_GET(seg->smpls_label));	
 		goto bad;
 	}
 
@@ -286,7 +298,7 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 		goto done;
 	}
 	log(LOG_DEBUG, "%s: seg: %d -> empty llinfo\n", __func__, 
-		MPLS_LABEL_GET(satosmpls_label(dst)));			
+		MPLS_LABEL_GET(seg->smpls_label));			
 
 	if (la->la_numheld >= mpls_arp_maxhold) {
 		if (la->la_hold != NULL) {
@@ -318,7 +330,7 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 
 	la->la_asked++;
 	
-	mpls_arprequest(ifp, dst, IF_LLADDR(ifp));
+	mpls_arprequest(ifp, seg, IF_LLADDR(ifp));
 done:
 	if (la->la_flags & LLE_EXCLUSIVE)
 		LLE_WUNLOCK(la);
@@ -329,7 +341,7 @@ out:
 #ifdef MPLS_DEBUG
 	if (error == 0) {
 		(void)printf("%s: seg: %d -> %*D on %s\n", __func__, 
-			satosmpls_label_get(dst),
+			MPLS_LABEL_GET(seg->smpls_label),
 			ifp->if_addrlen, (u_char *)lla, ":", 
 			if_name(ifp));
 	}
@@ -345,7 +357,7 @@ bad:
  * Broadcast ARPOP_REQUEST.
  */
 static void
-mpls_arprequest(struct ifnet *ifp, const struct sockaddr *seg, u_char *lla)
+mpls_arprequest(struct ifnet *ifp, const struct sockaddr_mpls *seg, u_char *lla)
 {
 	struct mbuf *m;
 	struct arphdr *arh;
@@ -373,8 +385,8 @@ mpls_arprequest(struct ifnet *ifp, const struct sockaddr *seg, u_char *lla)
 	arh->ar_op = htons(ARPOP_REQUEST);
 	
 	bcopy((caddr_t)lla, (caddr_t)ar_sha(arh), arh->ar_hln);
-	bcopy((caddr_t)&satosmpls_label(seg), 
-			(caddr_t)ar_spa(arh), arh->ar_pln);
+	bcopy((caddr_t)&seg->smpls_label, 
+		(caddr_t)ar_spa(arh), arh->ar_pln);
 			
 	bzero(&sa, sizeof(sa));	
 	sa.sa_family = AF_ARP;
@@ -517,11 +529,12 @@ mpls_arpinput(struct mbuf *m)
 		
 		if (mpls_proxy_arp != 0 && satosftn_op(gw) != RTF_POP) {			
 			seg->smpls_label = satosftn_label(gw);
-			gw = (struct sockaddr *)&seg;
+			
 /* 
  * Request lla downstream, if enabled.
  */					
-			mpls_arprequest(ifp, gw, IF_LLADDR(ifp));
+			mpls_arprequest(ifp, seg, IF_LLADDR(ifp));
+			gw = (struct sockaddr *)&seg;
 		}
 /*
  * Reply ucast lla upstream.
