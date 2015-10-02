@@ -461,6 +461,7 @@ mpls_control(struct socket *so __unused, u_long cmd, caddr_t data,
 	int priv = 0;
 	int flags = 0;
 	int error = 0;
+	
 	struct sockaddr *seg, *x;
 
 #ifdef MPLS_DEBUG

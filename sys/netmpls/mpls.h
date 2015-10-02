@@ -82,7 +82,11 @@
 
 #define MPLS_INKERNEL_LOOP_MAX 	16
 #define NETISR_MPLS 			13	/* SWI for MPLS */
-#define M_MPLS 	M_PROTO2 /* by arpresolve cached MPI in AF_MPLS */ 
+
+/* 
+ * During adress resulotion cached MPI in AF_MPLS. 
+ */
+#define M_MPLS  	0x01000000  
 
 /*
  * Flags representing internal state during 

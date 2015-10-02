@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Henning Matyschok
+ * Copyright (c) 2015 Henning Matyschok
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -103,8 +103,6 @@ __FBSDID("$FreeBSD: releng/10.1/sys/netinet/if_ether.c 267175 2014-06-06 17:42:5
 #ifdef MPLS 
 #include <netmpls/mpls.h>
 extern void 	mpls_arpinput(struct mbuf *);
-extern void 	mpls_arpoutput(struct ifnet *, struct mbuf *, 
-	const struct sockaddr *, struct llentry *);
 extern void 	mpls_link_rtrequest(int, struct rtentry *, 
 	struct rt_addrinfo *);
 #endif /* MPLS */
@@ -820,19 +818,66 @@ match:
 		 */
 		if (la->la_hold != NULL) {
 			struct mbuf *m_hold, *m_hold_next;
-
+#ifdef MPLS
+			struct mpls_ro mplsroute;
+			struct sockaddr_mpls *seg;
+			struct route *ro;
+#endif /* MPLS */		
 			m_hold = la->la_hold;
 			la->la_hold = NULL;
 			la->la_numheld = 0;
+#ifdef MPLS
+			bzero(&mplsroute, sizeof(mplsroute));
+			ro = (struct route *)&mplsroute;
+			ro->ro_lle = la;
+		
+			(void)memcpy(&ro->ro_dst, L3_ADDR(la), 
+				L3_ADDR(la)->sa_len);
+			seg = (struct sockaddr_mpls *)&ro->ro_dst;
+#else
 			memcpy(&sa, L3_ADDR(la), sizeof(sa));
+#endif /* MPLS */
 			LLE_WUNLOCK(la);
 			for (; m_hold != NULL; m_hold = m_hold_next) {
 				m_hold_next = m_hold->m_nextpkt;
 				m_hold->m_nextpkt = NULL;
 				/* Avoid confusing lower layers. */
 				m_clrprotoflags(m_hold);
-#ifdef MPLS			
-				mpls_arpoutput(ifp, m_hold, &sa, la);
+#ifdef MPLS
+				if (m->m_flags & M_MPLS) {
+					struct shim_hdr *shim;
+/*
+ * Rebuild gateway address, if cached mbuf(9) originates AF_MPLS.
+ */								
+					shim = mtod(m_hold, struct shim_hdr *);
+					
+					seg->smpls_len = SMPLS_LEN;
+					seg->smpls_family = AF_MPLS;
+					seg->smpls_label = 
+							shim->shim_label & MPLS_LABEL_MASK;
+/*
+ * Fetch corrosponding Next Hop Forwarding Entry (nhlfe).
+ */			
+					IF_ADDR_RLOCK(ifp);
+					TAILQ_FOREACH(ifa, 
+						&ifp->if_addrhead, ifa_link) {
+	
+						if ((ifa->ifa_flags & IFA_NHLFE) == 0)
+							continue;
+	
+						if (satosftn_label(ifa->ifa_dstaddr) == 
+							seg->smpls_label) {
+/*
+ * Perform shortcut.
+ */						
+							mpls_lle(ifa) = ro->ro_lle;
+						}
+					}
+					IF_ADDR_RUNLOCK(ifp);
+				}
+				
+				(void)(*ifp->if_output)
+					(ifp, m_hold, &ro->ro_dst, ro);
 #else
 				(*ifp->if_output)(ifp, m_hold, &sa, NULL);
 #endif /* MPLS */

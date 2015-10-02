@@ -476,9 +476,9 @@ abstraction was replaced by
         struct mpls_ifinfo *mii;
         struct mpls_ro *mro;
         struct sockaddr *gw;
-        
+    
         int error = 0;
-
+    
         if ((ifp->if_flags & IFF_MPLS) == 0) {
 /*
  * Any pdu originates MPLS-layer are looped back into its 
@@ -502,23 +502,8 @@ abstraction was replaced by
     
         if (ro == NULL) 
             ro = (struct route *)mro;    
-    
-        if (ro->ro_rt == NULL) {
-            gw = (struct sockaddr *)dst;
-    
-            if (m->m_flags & M_MPLS) {    
-/*
- * Bypass tagging, if mbuf(9) was cached by MPLS_ARP.
- */                
-                m->m_flags &= ~M_MPLS;            
-                goto passout;
-            }
-/*
- * Otherwise, mbuf(9) must pass mpls_encap, if 
- * interface is bound by MPLS label binding on
- * per-interface MPLS label space.  
- */                
-        } else {
+
+        if (ro->ro_rt != NULL) {
 /*
  * If route exists, three cases are considered:
  * 
@@ -539,9 +524,20 @@ abstraction was replaced by
                 gw = (struct sockaddr *)&mro->mro_gw;
             } else
                 gw = (struct sockaddr *)dst;        
-        } 
+        } else
+            gw = (struct sockaddr *)dst;
     
-        if (mii->mii_nhlfe != NULL) {
+        if (m->m_flags & M_MPLS) {
+/*
+ * Bypass tagging, if mbuf(9) was cached by MPLS_ARP.
+ */
+            m->m_flags &= ~M_MPLS;
+        } else if (mii->mii_nhlfe != NULL) {
+/*
+ * Otherwise, mbuf(9) must pass mpls_encap, if 
+ * interface is bound by MPLS label binding on
+ * per-interface MPLS label space.  
+ */    
             mro->mro_ifa = mii->mii_nhlfe;
             gw = mro->mro_ifa->ifa_dstaddr;
 /*
@@ -553,7 +549,6 @@ abstraction was replaced by
             }
             gw = (struct sockaddr *)&mro->mro_gw;
         }
-    passout:
     
         if (gw->sa_family == AF_MPLS) {
 /* 
@@ -566,10 +561,11 @@ abstraction was replaced by
             ) {        
                 if (mpls_pfil(&m, ifp, PFIL_OUT) != 0)
                     goto done;
-                
+                    
                 if (m == NULL)
                     goto done;
             }
+            
             m->m_flags &= ~(M_BCAST|M_MCAST);
         }
         error = (*mii->mii_output)(ifp, m, gw, ro);    

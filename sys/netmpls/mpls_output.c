@@ -88,8 +88,6 @@ int	mpls_output(struct ifnet *, struct mbuf *, const struct sockaddr *,
  *   A                                            |
  *   |                                            V
  *
- * Regarding IPv6, I/O Path is similar, but mpls_output 
- * is called in context of nd6_output.
  */
 int
 mpls_output(struct ifnet *ifp, struct mbuf *m, 
@@ -104,7 +102,7 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 	
 #ifdef MPLS_DEBUG
 	struct shim_hdr *shim;
-#endif /* MPLS_DEBUG */	
+#endif /* MPLS_DEBUG */ 	
 	
 	if ((ifp->if_flags & IFF_MPLS) == 0) {
 /*
@@ -129,23 +127,8 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 	
 	if (ro == NULL) 
 		ro = (struct route *)mro;	
-	
-	if (ro->ro_rt == NULL) {
-		gw = (struct sockaddr *)dst;
-	
-		if (m->m_flags & M_MPLS) {	
-/*
- * Bypass tagging, if mbuf(9) was cached by MPLS_ARP.
- */				
-			m->m_flags &= ~M_MPLS;			
-			goto passout;
-		}
-/*
- * Otherwise, mbuf(9) must pass mpls_encap, if 
- * interface is bound by MPLS label binding on
- * per-interface MPLS label space.  
- */				
-	} else {
+
+	if (ro->ro_rt != NULL) {
 /*
  * If route exists, three cases are considered:
  * 
@@ -166,9 +149,20 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 			gw = (struct sockaddr *)&mro->mro_gw;
 		} else
 			gw = (struct sockaddr *)dst;		
-	} 
+	} else
+		gw = (struct sockaddr *)dst;
 	
-	if (mii->mii_nhlfe != NULL) {
+	if (m->m_flags & M_MPLS) {
+/*
+ * Bypass tagging, if mbuf(9) was cached by MPLS_ARP.
+ */
+		m->m_flags &= ~M_MPLS;
+	} else if (mii->mii_nhlfe != NULL) {
+/*
+ * Otherwise, mbuf(9) must pass mpls_encap, if 
+ * interface is bound by MPLS label binding on
+ * per-interface MPLS label space.  
+ */	
 		mro->mro_ifa = mii->mii_nhlfe;
 		gw = mro->mro_ifa->ifa_dstaddr;
 /*
@@ -180,7 +174,6 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 		}
 		gw = (struct sockaddr *)&mro->mro_gw;
 	}
-passout:
 	
 	if (gw->sa_family == AF_MPLS) {
 /* 

@@ -200,8 +200,6 @@ static void 	mpls_arprequest(struct ifnet *, const struct sockaddr *,
 
 int 	mpls_arp_ifinit(struct ifnet *, struct ifaddr *);
 void 	mpls_arpinput(struct mbuf *);
-void 	mpls_arpoutput(struct ifnet *, struct mbuf *, 
-	const struct sockaddr *, struct llentry *);
 int 	mpls_arpresolve(struct ifnet *, struct rtentry *, struct mbuf *, 
 	const struct sockaddr *, u_char *, struct llentry **);
 
@@ -223,7 +221,9 @@ mpls_arpresolve(struct ifnet *ifp, struct rtentry *rt, struct mbuf *m,
 	int error;
 	
 	*lle = NULL;
-	
+/*
+ * Annotate mbuf(9).
+ */	
 	m->m_flags |= M_MPLS;
 	
 	if ((ifp->if_flags & IFF_MPLS) == 0) {
@@ -598,6 +598,7 @@ mpls_arpinput(struct mbuf *m)
 found:
 			IFNET_RUNLOCK_NOSLEEP();
 		}
+		
 		if (mro->mro_ifa == NULL)
 			break;
 		
@@ -660,158 +661,6 @@ found:
 done:	
 	if (drop != 0)
 		m_freem(m);
-}
-
-/*
- * Transmit by ARP cached mbuf(9).
- * 
- * XXX: missing nd6 integration. 
- */
-void
-mpls_arpoutput(struct ifnet *ifp, struct mbuf *m,
-		const struct sockaddr *dst, struct llentry *lle)
-{	
-	struct sockaddr *gw = (struct sockaddr *)dst;
-	
-	struct mpls_ro mplsroute;
-	struct mpls_ro *mro;
-	struct sockaddr *seg;
-	struct shim_hdr *shim;
-	
-	struct shim_hdr stk[MPLS_INKERNEL_LOOP_MAX];
-	size_t nstk, len;
-	
-	struct sockaddr_ftn sftn;
-	struct sockaddr *x;	
-	
-	struct ip *ip;
-#ifdef INET6
-	struct ip6_hdr *ip6hdr; 
-#endif /* iNET6 */
-/*
- * Verify, if mbuf(9) originates from MPLS domain.
- */	
-	if ((m->m_flags & M_MPLS) == 0) 
-		goto done;
-
-	if ((ifp->if_flags & IFF_MPLS) == 0) 
-		goto bad;
-	
-	mro = &mplsroute;
-	bzero(mro, sizeof(*mro));
-	seg = (struct sockaddr *)&mro->mro_gw;
-	
-	if (m->m_pkthdr.len < MPLS_HDRLEN) 
-		goto bad;
-	
-	if (m->m_len < MPLS_HDRLEN) {
-		if ((m = m_pullup(m, MPLS_HDRLEN)) == NULL) 
-			goto bad;
-	}
-/*
- * Collect segment on top of stack.
- */
-	shim = mtod(m, struct shim_hdr *);
-	satosmpls_label(seg) = shim->shim_label & MPLS_LABEL_MASK;
-/*
- * Strip off MPLS label stack and keep a copy.
- */
-	for (nstk = 0; nstk < MPLS_INKERNEL_LOOP_MAX; nstk++) {
-		if (m->m_len < MPLS_HDRLEN) {
-		    if ((m = m_pullup(m, MPLS_HDRLEN)) == NULL) 
-				goto bad;
-		}
-		stk[nstk] = *mtod(m, struct shim_hdr *);
-		m_adj(m, MPLS_HDRLEN);
-		if (MPLS_BOS(stk[nstk].shim_label))
-			break;
-	}
-	len = (nstk + 1) * MPLS_HDRLEN;
-/*
- * Perform basic condition tests on  
- * Protocol Control Information (pci)
- * and get key x in fec.
- */
-	bzero(&sftn, sizeof(sftn));
-	x = (struct sockaddr *)&sftn;
-	
-	switch (gw->sa_family) {
-	case AF_INET:
-	
-		if (mpls_ip_checkbasic(&m) != 0) 
-			goto bad;
-			
-		ip = mtod(m, struct ip *);
-    	satosin(x)->sin_addr.s_addr = 
-    		ip->ip_dst.s_addr;
-    	x->sa_len = sizeof(struct sockaddr_in);
-		break;
-#ifdef INET6
-	case AF_INET6:
-	
-		if (mpls_ip6_checkbasic(&m) != 0) 
-			goto bad;
-
-		ip6hdr = mtod(m, struct ip6_hdr *);
-    	satosin6(x)->sin6_addr = ip6hdr->ip6_dst;
-    	x->sa_len = sizeof(struct sockaddr_in6);
-		break;
-#endif /* INET6 */
-	default:
-		goto bad;
-	}
-	x->sa_family = x->sa_family;
-/*
- * Restore cached stack.
- */	
-	M_PREPEND(m, len, M_NOWAIT);
-	if (m == NULL) 
-		goto out;
-	
-	bcopy(stk, mtod(m, caddr_t), len); 
-/*
- * Locate nhlfe on by fec used interface, if any.
- */	
-	IF_ADDR_RLOCK(ifp);
-	TAILQ_FOREACH(mro->mro_ifa, &ifp->if_addrhead, ifa_link) {
-	
-		if ((mro->mro_ifa->ifa_flags & IFA_NHLFE) == 0)
-			continue;
-		
-		if (mpls_sa_equal(x, mro->mro_ifa->ifa_dstaddr) == 0)
-			continue;
-		
-		if (satosftn_label(mro->mro_ifa->ifa_dstaddr) 
-			== satosmpls_label(seg))  {
-			ifa_ref(mro->mro_ifa);
-			break;
-		}
-	}
-	IF_ADDR_RUNLOCK(ifp);
-	
-	if (mro->mro_ifa == NULL) 
-		goto bad;
-/*
- * X-connect.
- */	
- 	mpls_lle(mro->mro_ifa) = lle;
-	ifa_free(mro->mro_ifa);
-	gw = seg;
- 		
-#ifdef MPLS_DEBUG
-	(void)printf("%s: seg: %d -> %*D on %s\n", __func__, 
-		satosmpls_label_get(x),
-		ifp->if_addrlen, (u_char *)&lle->ll_addr.mac16, ":", 
-		if_name(ifp));
-#endif /* MPLS_DEBUG */
-	
-done:	
-	(void)(*ifp->if_output)(ifp, m, gw, NULL);
-out:
-	return;
-bad:    
-	m_freem(m);
-	goto out;
 }
 
 /*
