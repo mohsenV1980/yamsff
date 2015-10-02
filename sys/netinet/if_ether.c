@@ -819,10 +819,10 @@ match:
 		if (la->la_hold != NULL) {
 			struct mbuf *m_hold, *m_hold_next;
 #ifdef MPLS
-			struct mpls_ro mplsroute;
-			struct route *ro;
 			struct shim_hdr *shim;
 			struct sockaddr_mpls *seg;
+			struct mpls_ro mplsroute;
+			struct route *ro;	
 #endif /* MPLS */		
 			m_hold = la->la_hold;
 			la->la_hold = NULL;
@@ -846,7 +846,7 @@ match:
 				if (m->m_flags & M_MPLS) {
 					shim = mtod(m_hold, struct shim_hdr *);
 /*
- * Rebuild gateway address, if cached mbuf(9) originates AF_MPLS.
+ * Rebuild gateway address, if cached mbuf(9) originates AF_MPLS domain.
  */
 					seg = (struct sockaddr_mpls *)&ro->ro_dst;
 					

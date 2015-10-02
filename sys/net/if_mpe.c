@@ -40,7 +40,7 @@
  */
 #include "opt_inet.h"
 #include "opt_inet6.h"
-
+#include "opt_mpls.h"
 #include "opt_mpls_debug.h"
  
 #include <sys/param.h>

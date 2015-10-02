@@ -3963,16 +3963,16 @@ xdr/xdr_sizeof.c		optional krpc | nfslockd | nfsclient | nfsserver | nfscl | nfs
 #
 # Extensions for MPLS and if_bridge(4).
 #
-net/if_mpe.c 			optional if_mpe mpls inet 
+net/if_mpe.c 			optional if_mpe mpls inet inet6
 net/if_vether.c			optional if_vether
 
 netmpls/mpls.c 	optional mpls inet
-netmpls/mpls_arp.c 	optional mpls inet
-netmpls/mpls_input.c 	optional mpls inet
-netmpls/mpls_output.c 	optional mpls inet
-netmpls/mpls_proto.c 	optional mpls inet
-netmpls/mpls_raw.c 	optional mpls inet
-netmpls/mpls_rmx.c 	optional mpls inet
-netmpls/mpls_rtalert.c 	optional mpls inet
-netmpls/mpls_shim.c 	optional mpls inet
+netmpls/mpls_arp.c 	optional mpls inet inet6
+netmpls/mpls_input.c 	optional mpls inet inet6
+netmpls/mpls_output.c 	optional mpls inet inet6
+netmpls/mpls_proto.c 	optional mpls inet inet6
+netmpls/mpls_raw.c 	optional mpls inet inet6
+netmpls/mpls_rmx.c 	optional mpls inet inet6
+netmpls/mpls_rtalert.c 	optional mpls inet inet6
+netmpls/mpls_shim.c 	optional mpls inet inet6
 

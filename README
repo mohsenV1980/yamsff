@@ -213,6 +213,16 @@ Due to simplicity I've integrated the AF_MPLS domain into sys directory.
                             Implements Service Access Point (sap) for 
                             handoff mbuf(9) containing MPLS_ARP sdu 
                             into AF_MPLS domain.                 
+                 netinet6/   
+                 
+                  Integration of AF_MPLS domain into AF_INET6 domain.
+                  
+                  nd6.c
+                  
+                            Implements address resolution for mbuf(9) 
+                            originatimg AF_MPLS domain and inclusion
+                            mapping of fastpath into AF_MPLS domain.
+                 
                  
                  netmpls/
                   

@@ -53,6 +53,9 @@
 !/sys/netinet
 !/sys/netinet/if_ether.c
 
+!/sys/netinet6
+!/sys/netinet6/nd6.c
+
 !/sys/netmpls
 !/sys/netmpls/*
 
