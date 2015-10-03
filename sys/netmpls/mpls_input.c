@@ -586,8 +586,7 @@ mpls_pfil(struct mbuf **mp, struct ifnet *ifp, int dir)
 	
 	i = min((*mp)->m_pkthdr.len, max_protohdr);
 	if ((*mp)->m_len < i) {
-	    *mp = m_pullup(*mp, i);
-	    if (*mp == NULL) {
+	    if ((*mp = m_pullup(*mp, i)) == NULL) {
 			printf("%s: m_pullup failed\n", __func__);
 			goto done;
 	    }
@@ -653,8 +652,7 @@ mpls_pfil(struct mbuf **mp, struct ifnet *ifp, int dir)
 		if (hlen > (*mp)->m_len) {
 			if ((*mp = m_pullup(*mp, hlen)) == 0)
 				goto bad;
-			ip = mtod(*mp, struct ip *);
-			if (ip == NULL)
+			if ((ip = mtod(*mp, struct ip *)) == NULL)
 				goto bad;
 		}
 		ip->ip_len = htons(ip->ip_len);
@@ -1160,12 +1158,12 @@ mpls_ip_fragment(struct ifnet *ifp, struct mbuf *m,
 
 	if (m->m_len < sizeof(struct ip) &&
 	    (m = m_pullup(m, sizeof(struct ip))) == NULL)
-		goto out;
+		goto bad;
 	ip = mtod(m, struct ip *);
 
 	error = ip_fragment(ip, &m, (ifp->if_mtu - stksize), ifp->if_hwassist);
 	if (error)
-		goto out;
+		goto bad;
 
 	/* walk the chain and re-add stack */
 	for (m0 = m; m0; m0 = m0->m_nextpkt) {
@@ -1179,10 +1177,11 @@ mpls_ip_fragment(struct ifnet *ifp, struct mbuf *m,
 		} else
 			m_freem(m);
 	}
+out:	
 	return (error);
-out:
+bad:
 	m_freem(m);
-	return (error);
+	goto out;
 }
 
 

@@ -202,7 +202,7 @@ mpls_output(struct ifnet *ifp, struct mbuf *m,
 
 		m->m_flags &= ~(M_BCAST|M_MCAST);
 	}
-	error = (*mii->mii_output)(ifp, m, gw, ro);	
+	error = (*mii->mii_output)(ifp, m, gw, ro);
 done:	
 	if (mro != NULL)
 		mpls_rtfree(mro);
