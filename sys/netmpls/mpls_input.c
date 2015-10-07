@@ -143,7 +143,7 @@ static void	mpls_dummynet(struct mbuf *, struct ifnet *);
 
 static void 	mpls_input(struct mbuf *);
  
-void	mpls_forward(struct mbuf *);
+static void 	mpls_forward(struct mbuf *);
 void	mpls_init(void);
 
 static void 	mpls_bridge_if(void *arg __unused, struct ifnet *, int);
@@ -171,6 +171,13 @@ static struct netisr_handler mpls_nh = {
 	.nh_policy 		= NETISR_POLICY_FLOW,
 };
 
+static struct netisr_handler mpls_forward_nh = {
+	.nh_name 		= "mpls forwarding",
+	.nh_handler 		= mpls_forward,
+	.nh_proto 		= NETISR_MPLS_FWD,
+	.nh_policy 		= NETISR_POLICY_FLOW,
+};
+
 /*
  * MPLS initialisation.
  */
@@ -182,6 +189,7 @@ mpls_init(void)
 		NULL, EVENTHANDLER_PRI_ANY);
 	mpls_dn_p = mpls_dummynet;
 	netisr_register(&mpls_nh);
+	netisr_register(&mpls_forward_nh);
 }
 
 /*
@@ -207,7 +215,7 @@ mpls_dummynet(struct mbuf *m, struct ifnet *ifp)
 	bcopy(&mtm->mtm_stk, mtod(m, caddr_t), mtm->mtm_size);
 	m_tag_delete(m, &mtm->mtm_tag);
 	
-	mpls_forward(m);
+	netisr_dispatch(NETISR_MPLS_FWD, m);
 }
 
 /*
@@ -268,7 +276,7 @@ mpls_input(struct mbuf *m)
 	(void)printf("%s: on=%s \n", __func__, ifp->if_xname);
 #endif /* MPLS_DEBUG */
 
-	mpls_forward(m);
+	netisr_dispatch(NETISR_MPLS_FWD, m);
 	return;	
 bad:
 	m_freem(m);	
@@ -299,7 +307,7 @@ bad:
  *
  *     if possible. 
  */
-void
+static void
 mpls_forward(struct mbuf *m)
 {
 	struct ifnet *ifp = NULL;

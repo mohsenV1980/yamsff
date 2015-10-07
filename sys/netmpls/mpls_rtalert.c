@@ -42,6 +42,7 @@
 
 #include <net/if.h>
 #include <net/if_types.h>
+#include <net/netisr.h>
 #include <net/raw_cb.h>
 
 #include <netmpls/mpls.h>
@@ -53,7 +54,6 @@
  
 extern struct mbuf *	mpls_shim_pop(struct mbuf *);
 extern int 	mpls_ifawithseg_check_fib(struct sockaddr *, u_int);
-extern void	mpls_forward(struct mbuf *);
 
 /*
  * Template.
@@ -354,7 +354,7 @@ mpls_rtalert_output(struct mbuf *m, struct socket *so)
 	shim->shim_label &= ~MPLS_TTL_MASK;
 	shim->shim_label |= htonl(ttl);
 
-	mpls_forward(m);
+	netisr_dispatch(NETISR_MPLS_FWD, m);
 done:
 	return (error);
 bad:

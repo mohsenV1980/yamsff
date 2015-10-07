@@ -81,7 +81,8 @@
 #endif /* INET6 */
 
 #define MPLS_INKERNEL_LOOP_MAX 	16
-#define NETISR_MPLS 			13	/* SWI for MPLS */
+#define NETISR_MPLS 			13	/* SWI for MPLS input */
+#define NETISR_MPLS_FWD 		14	/* SWI for MPLS forwarding */
 
 /* 
  * During adress resulotion cached MPI in AF_MPLS. 
